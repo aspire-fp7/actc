@@ -1,0 +1,340 @@
+2.8.0
+- tools/compiler
+  - added SOCompiler tool
+- tools/remote
+  - added CFT tool
+- core
+  - added tool support for CFT
+- condig
+  - added CFT configuration
+
+2.7.0
+- tools/diablo
+  - added diversity script generation tool for code mobility
+- core
+  - tool support for diversified code mobility
+
+2.6.3
+- tools/BLP03 linker
+ - link in renewability object
+- config
+ - added renewability tool
+
+2.6.2
+- tools/diablo
+  - bytecode diversification support
+- tools/xtranslator
+  - bytecode diversification support
+- cli
+  - 32bit bytecode diverisity seed 
+- core
+  - caching ACTC bugfix
+- tools/BLP03_link
+  - updated the included objects
+- tools/COMPILE_C(PP)
+  - caching support fix
+- tools/SLP04 annotation extractor
+  - updated annotation parsing script
+
+2.6.1
+- tools/renewability
+  - added support tools for renewability manager
+- config
+  - added renewability support
+- core
+  - added task_SERVER_RENEWABILITY_CREATE
+  - added task_SERVER_RENEWABILITY_POLICY 
+
+2.6.0
+- tools/wbc
+  - license file support
+- tools/SLP02 preprocessor
+  - re-execute preprocessor steps when header files change
+- tools/compile_cpp
+  - re-execute cpp compilation steps when header files change
+- tools/BLP03 linker
+  - link in binder and downloader when softvm annotations are present
+- tools/SLP05 data obfuscation
+  - preprocess newly generated files
+- tools/SLP09 anti-cloning
+  - Split the anti-cloning tool in subtasks
+- tools/diablo
+  - individual flags to disable protectiont techniques
+- config
+  - added file_patch option in COMPILE_ACCL section
+  - added WBC license file support
+- cli
+  - added -a/--aid option
+- core
+  - caching ACTC 
+  - multi-step annotation rewriting
+  - added tool support for reaction-unit mechanism
+  - added tool support for diversified crypto library
+
+
+2.5.0
+- tools/wbc
+  - wbc renewability script generator added
+- tools/SLP01
+  - ADSS annotation rewriting support added
+
+2.4.2
+- core
+  - updated code comments and graph generation
+- config
+  - added bin2bin.bytecode_diversity_seed option
+  - server_ip check added
+- tools/diablo
+  - added "-CM" option in DiabloObfuscator tool
+  - added "--softvm-diversity-seed" option in DiabloObfuscator tool
+- tools/annotation extrator
+  - improved internal annotation parsing
+
+2.4.1
+- config
+  - added version check
+- core
+  - RA skip conditions
+  - RA dependencies
+  - RA server script dependencies
+  - fixed cpp splitter step
+  - fixed internal annotation datastructure init
+- tools/diablo
+  - updated xtranslate options
+- tools/client_server_splitter
+  - removed task_SLP06_03_PREPROCESS_SERVER
+  - updated task_SLP06_03_PREPROCESS_CLIENT
+
+2.4.0
+- core
+  - added support for metrics collection
+  - added support for collecting runtime profile information
+  - added centralized folder (M01) with collected metrics from all tasks
+  - added sample script to collect runtime profiles for SFNT usecase
+- tools/diablo
+  - added support for generating self-profiling binaries
+  - added support to compile with profile information
+- examples
+  - updated configuration files
+  - server
+  -updated server-side script interface
+
+2.3.0
+- core
+  - added SLP09 anti_cloning tool
+  - moved annotation extraction to the end of the src2src tranformations
+- codeguard
+  - preprocess generated c files
+  
+2.2.0
+- core
+  - added SLP08 codeguard tools
+
+2.1.2
+- core
+  - ACCL compiled by ACTC
+  - added task_SLP04_PARSE to parse D01/annotations.json 
+- tools/server
+  - added "ip_address" option
+  - updated P10,P20 and P80 script calling conventions
+
+2.1.1
+- tools/client_server_splitter
+  - added support for version 2.0.1
+  - updated fact checking code
+  - fixed traversing bug
+
+2.1.0
+- tools/client_server_splitter
+  - added support for version 2.0.0
+
+2.0.0
+- core
+  - added "D01/annotations.json" as dependency to all bin2bin steps 
+  - fixed compiler/linker options
+- tools/diablo
+  - reworked "DiabloObfuscator"
+
+1.5.0
+- core
+  - added "anti_debugging" protection support
+  - added options to task_SLP03_05_REWRITE
+  - added task_SLP04_COPY
+  - added task_SLP07_RA
+  - added task_SERVER_PXX
+  - added "libz" dependency (#155)
+  - updated linker flags (#154)
+  - renamed "codemobility" into "code_mobility"
+  - fixed task_SLP03_02_WHITEBOX
+  - fixed task_SLP03_03_HEADER
+- tools/__init__
+  - fixed folder creation
+- tools/splitter
+  - patched SplitterNormalizer command line  
+- tools/remote
+  - AttestatorSelector - new
+- tools/wbc
+  - Reworked WbcWhiteBoxTool
+  - Reworked WbcHeaderIncluder
+
+1.4.0
+- config
+  - added "SERVER" options
+- core
+  - added task_SERVER_PXX to manage server files
+  - reworked task_SLP04_MERGE & task_BLP03_LINK to link only necessary libraries
+
+1.3.0
+- config
+  - added "third_party" option
+  - added "UPLOAD" options
+- core
+  - added task_UPLOAD
+  - updated task_BLP03_LINK parameters adding OpenSLL libraries
+  - reworked graph generation
+- tools/splitter
+  - added "–l logfile.json" option to SplitterClientGenerator tool
+- tools/data
+  - added "-a logfile.json" option to DataObuscator tool
+- tools/ftpupload
+  - FTPUpload - new
+
+1.3.0c
+- core
+  - fixed task_BLP03_LINK parameters
+- tools/wbc
+  - added "-l logfile.json" option to WbcSourceRewriter tool
+  
+1.3.0b
+- core
+  - added offline needed object files in task_BLP03_LINK
+  - fixed order of object files in linker command (#144)
+- config
+  - added "accl" & "code_mobility" tools
+
+1.3.0a
+- core
+  - added AID.txt creation
+  - updated steps with "platform" paths 
+  - reworked client/server code splitting steps
+  - fixed C compilation (#141)
+- config
+  - added "platform" option
+- tools/diablo
+  - added "-CMO" option in DiabloObfuscator tool
+
+1.2.0
+- core
+  - added client/server code splitting steps (#139)
+- tools/splitter
+  - added client_server_splitter tools (#139)
+
+1.1.0
+- core
+  - added pragma reverse conversion in task_SLP03_05 (#131)
+  - added AID generation and invocation by compilers (#133)
+  - added AID option for diablo (#133)
+  - added processing graph generation (using dot)
+- config
+  - added codesurfer tool (#132)
+- tools/wbc
+  - added PragmaConverterReverse tool (#131)
+- tools/codesurfer
+  - added Initialiser and Analyser tools (#132)
+
+1.0.0
+- core
+  - added POST processing task (#107)
+  - fixed task SLP03_04 adding include path (#109)
+  - fixed task SLP03_MERGE filtering server files (#113)
+  - fixed task SLP03_02 filtering empty files (#116, #122)
+  config
+  - added POST processing parameters (#107)
+- tools/diablo
+  - updated interface with "dots" folders (#124)
+
+0.8.0
+- tools/diablo
+  - added --transformation-log-path option (#97)
+- core
+  - added dependency on configuration file (#98)
+- config
+  - added environment variable expansion (#100)
+
+0.7.0
+- cli
+  - added -d/--debug and -v/--verbose options (#84)
+- core
+  - updated diablo-obfuscator call (#92)
+- dodo
+  - added DebugReporter (#84)
+- tools/diablo
+  - updated interface (#92)
+- tools/utils
+  - fixed random IOError (#83)
+
+0.6.0
+- core
+  - removed normalizer step (#34)
+  - fixed json merge (#54)
+  - added '-g' option to C and C++ compiler tasks (#55)
+  - added '-ldl' option to linker task_BLP03 (#56)
+  - moved SLP04 at the end of src2src part (#58)
+- config
+  - removed normalizer parameter (#34)
+  - moved SLP04 at the end of src2src part (#58)
+  - improved aspire.json readability
+- tools/annotation
+  - improved annotations.json readability (#57)
+
+0.5.0
+- core
+  - added shared library support
+  - added annotation files merge
+  - changed step order (compliant with WD5.02 document)
+  - split compilation step (C and C++)
+- config
+  - added frontend tool (e.g. gcc, clang)
+  - added PREPROCESSOR options
+  - added C options
+  - added C++ options
+- tools/annotation
+  - JsonMerger - new
+- tools/compiler
+  - generic compiler collection - new
+- tools/__init__
+  - AbstractBasicPythonTool
+    - renaming parameters are now passed by keyword arguments
+
+0.4.0
+- core
+  - all current steps implemented
+- tools
+  - annotation extraction
+  - diablo-extractor
+  - xtranslator
+  - SoftVM link
+  - diablo-obfuscator
+
+0.3.0:  M12 Release
+- config
+  - 4 main entries (tools, src2src, src2bin, bin2bin)
+- core
+  - tasks enabled/disabled according to config parameters
+- tools/llvm
+  - preprocessor
+  - compiler (binutils as)
+  - linker (binutils ld)
+- tools/diablo
+  - obfuscator
+- tools/wbc
+  - annotation_reader
+  - wbta
+  - wbc
+
+0.2.0
+- added Configuration file management with -g/--generate and -u/--update options
+
+0.1.0:  Initial Release
+
+END OF FILE
