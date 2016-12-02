@@ -30,7 +30,7 @@
 
 @brief   Diablo frontend
 
-@author  Ronan Le Gallic, Jeroen Van Cleemput
+@author  Ronan Le Gallic, Jeroen Van Cleemput, Jens Van den Broeck
 
 @date    2014/10/21
 '''
@@ -50,6 +50,7 @@ from time                       import sleep
 from doit.action                import CmdAction
 
 from actc.tools                 import toList
+from actc.tools                        import AbstractBasicCmdTool
 from actc.tools                 import AbstractCmdTool
 from actc.tools                 import AbstractPythonTool
 
@@ -58,6 +59,40 @@ from actc.tools                 import AbstractPythonTool
 # ------------------------------------------------------------------------------
 
 DIABLO_EXTRACTOR = '/opt/diablo/bin/diablo-extractor'
+CONVERTER = '/opt/diablo/scripts/profiles/reverse-translate.py'
+
+class ProfileTranslator(AbstractBasicCmdTool):
+    '''
+    ProfileTranslator
+    '''
+
+    def __init__(self, program = CONVERTER,
+                       options = None,
+                       outputs = ('build/bin', '.out')):
+        '''
+        @copydoc actc.tools.AbstractCmdTool.__init__
+        '''
+        super(ProfileTranslator, self).__init__(program = program,
+                                     options = options,
+                                     outputs = outputs)
+    # end def __init__
+
+    _ACTION = 'profiletranslation'
+
+    def _cmd(self, task):                                                 # pylint:disable=W0221
+        '''
+        @copydoc actc.tools.AbstractCmdTool._cmd
+        '''
+        args = list(self._program)
+
+        # options
+        args.extend(self._options)
+
+        return ' '.join(args)
+    # end def _cmd
+
+# end class ProfileTranslator
+
 
 class DiabloExtractor(AbstractCmdTool):
     '''
@@ -442,6 +477,10 @@ def generateDiabloCommand(program, options, self_profiling, softvm_diversity_see
 
     # --blockprofilefile <blockprofilefile>
 
+    # --annotation-file <annotfile>
+    args.append('--annotation-file')
+    args.append(annotfile)
+
     if(not self_profiling):
         # -L vmdir[:<libdir>]*
         args.append('-L')
@@ -451,10 +490,6 @@ def generateDiabloCommand(program, options, self_profiling, softvm_diversity_see
         # --instructionselector-path <isl>
         args.append('--instructionselector-path')
         args.append(join(dirname(dirname(vmdir)), 'libbin2vm_linux_pic.so'))
-
-        # --annotation-file <annotfile>
-        args.append('--annotation-file')
-        args.append(annotfile)
 
         # --extractor-output-file <chunks_file>
         args.append('--extractor-output-file')

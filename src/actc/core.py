@@ -85,6 +85,7 @@ from actc.tools.diablo          import DiabloObfuscator
 from actc.tools.diablo          import RenewableMobileBlocksGenerator
 from actc.tools.diablo          import DIABLO_SP_OBJ_LINUX
 from actc.tools.diablo          import DIABLO_SP_OBJ_ANDROID
+from actc.tools.diablo          import ProfileTranslator
 
 from actc.tools.compiler        import Compiler
 from actc.tools.compiler        import CompilerSO
@@ -3600,7 +3601,7 @@ class Actc(AbstractDodo):                                                       
         yield tool.tasks(src,
                          join(dst, dbin),
                          objdir=join(self._output, object_folder),
-                         metrics_file = src[2])
+                         runtime_profiles = src[2])
 
         # ----------------------------------------------------------------------
         self._updateDot('BLP00_03_DYN', [linker_folder, sp_folder, object_folder, annotations_folder], output_folder)
@@ -4081,6 +4082,38 @@ class Actc(AbstractDodo):                                                       
     # end def task_BLP03_LINK
 
     # ==========================================================================
+    def task_BLP03_migrate_profile(self):
+        # runtime profiles
+       profile_folder = self._folders['BLP00']['out_sp'] + self._folders['BLP00']['suffix']  # BC02_SP
+
+        # a.out|liba.so --> c.out|libc.so
+        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
+            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
+            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.')
+        else:
+            cbin = self._config.src2bin.LINK.binary
+            dbin = self._config.src2bin.LINK.binary
+        #end if
+
+        src_profile = join(self._output, profile_folder, 'profiles', 'profiling_section.' + cbin + '.self_profiling.plaintext')
+
+        if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(src_profile))):
+            return
+
+        # translate the BC02 profile so it is compatible with BC04 (the instruction addresses have changed)
+        dst = join(self._output, 'BLP03_migrate_profile', 'profiles')
+        dst_profile = join(dst, 'profiling_section.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
+
+        tool = ProfileTranslator(options =    ['-p', src_profile]
+                                            + ['-q', dst_profile]
+                                            + ['-m', join(self._output, 'BC02', self._config.src2bin.LINK.binary + '.map')]
+                                            + ['-n', join(self._output, 'BC04', self._config.src2bin.LINK.binary + '.map')],
+                                 outputs = (dst, ''))
+        yield tool.tasks(src_profile, dst_profile)
+    # end def task_BLP03_migrate_profile
+
+
+    # ==========================================================================
     def task_BLP04(self):
         '''
         BC04 + D01 (+ BC08 + BC03 + BLC02) --> obfuscation --> BC05
@@ -4115,7 +4148,7 @@ class Actc(AbstractDodo):                                                       
         xtranslator_folder = self._folders['BLP02']['out'] + self._folders['BLP02']['suffix']  # BC03
         linker_folder = self._folders['BLP03']['out'] + self._folders['BLP03']['suffix']  # BC04
         extractor_folder = self._folders['BLP01']['out'] + self._folders['BLP01']['suffix']  # BLC02
-        profile_folder = self._folders['BLP00']['out_sp'] + self._folders['BLP00']['suffix']  # BC02_SP
+        profile_folder = join(self._output, 'BLP03_migrate_profile')
         output_folder = self._folders['BLP04']['out'] + self._folders['BLP04']['suffix']  # BC05
 
         # ----------------------------------------------------------------------
@@ -4139,7 +4172,7 @@ class Actc(AbstractDodo):                                                       
             dst.append(join(self._output, output_folder, 'mobile_blocks'))
 
         # runtime profiles
-        profiles = join(self._output, profile_folder, 'profiles', 'profiling_section.' + cbin + '.self_profiling.plaintext')
+        profiles = join(self._output, profile_folder, 'profiles', 'profiling_section.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
         if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(profiles))):
             profiles = None
         else:
@@ -4400,7 +4433,7 @@ class Actc(AbstractDodo):                                                       
 
         # input and output folders
         annotations_folder = self._folders['SLP04']['out'] + self._folders['SLP04']['suffix']  # D01
-        profile_folder = self._folders['BLP00']['out_sp'] + self._folders['BLP00']['suffix']  # BC02_SP
+        profile_folder = join(self._output, 'BLP03_migrate_profile')
         object_folder = self._folders['COMPILE_C']['out'] + self._folders['COMPILE_C']['suffix']  # BC08
         xtranslator_folder = self._folders['BLP02']['out'] + self._folders['BLP02']['suffix']  # BC03
         linker_folder = self._folders['BLP03']['out'] + self._folders['BLP03']['suffix']  # BC04
@@ -4429,7 +4462,7 @@ class Actc(AbstractDodo):                                                       
             dst.append(join(self._output, output_folder, 'mobile_blocks'))
 
         # runtime profiles
-        profiles = join(self._output, profile_folder, 'profiles', 'profiling_section.' + cbin + '.self_profiling.plaintext')
+        profiles = join(self._output, profile_folder, 'profiles', 'profiling_section.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
         if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(profiles))):
             profiles = None
         else:
@@ -4438,7 +4471,7 @@ class Actc(AbstractDodo):                                                       
         # runtime profiles
         profiles_obf = join(self._output, obfuscator_folder, 'profiles', 'profiling_section.' + cbin + '.self_profiling.plaintext')
         if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(profiles_obf))):
-            profiles = None
+            profiles_obf = None
         else:
             src.append(profiles_obf)
 
