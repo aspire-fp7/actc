@@ -4084,7 +4084,7 @@ class Actc(AbstractDodo):                                                       
     # ==========================================================================
     def task_BLP03_migrate_profile(self):
         # runtime profiles
-       profile_folder = self._folders['BLP00']['out_sp'] + self._folders['BLP00']['suffix']  # BC02_SP
+        profile_folder = self._folders['BLP00']['out_sp'] + self._folders['BLP00']['suffix']  # BC02_SP
 
         # a.out|liba.so --> c.out|libc.so
         if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
