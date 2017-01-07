@@ -4712,7 +4712,8 @@ class Actc(AbstractDodo):                                                       
         tool = RenewabilityPolicy(program=self._config.SERVER.RENEWABILITY.set_policy_script,
                                 options=['-a', self._aid,
                                          '-d', self._config.SERVER.RENEWABILITY.revision_duration,
-                                         '-m', '1' if self._config.SERVER.RENEWABILITY.timeout_mandatory else '0'],
+                                         '-m', '1' if self._config.SERVER.RENEWABILITY.timeout_mandatory else '0',
+                                         '-r', join(self._output, 'BC05', 'generate_blocks_' + self._config.src2bin.LINK.binary + '.sh') ],
                                 outputs=(dst, ''))
 
         yield tool.tasks(src)
