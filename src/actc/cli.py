@@ -107,6 +107,12 @@ ACTC v %s
                            default=False,
                            help='only generate the application id (AID) ')
 
+        group.add_argument('-af', '--aidfixed',
+                           metavar = 'N',
+                           type = str,
+                           default = None,
+                           help = 'use fixed application id N (-1: generate automatically)')
+
         group = parser.add_argument_group('Configuration')
 
         group.add_argument('-f', '--file',
@@ -157,7 +163,7 @@ ACTC v %s
             # end if
 
             super(Main, self).__init__(args.file[0] if isinstance(args.file, list) else args.file,
-                                       debug=args.debug, verbose=args.verbose)
+                                       debug=args.debug, verbose=args.verbose, aid=args.aidfixed)
 
             if args.aid:
                 print('%s' % self._aid);

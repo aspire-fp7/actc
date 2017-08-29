@@ -129,7 +129,7 @@ class Actc(AbstractDodo):                                                       
     Aspire Compiler Tool Chain
     '''
 
-    def __init__(self, path, debug = False, verbose = False):
+    def __init__(self, path, debug = False, verbose = False, aid = None):
         '''
         Constructor
 
@@ -145,21 +145,26 @@ class Actc(AbstractDodo):                                                       
 
         super(Actc, self).__init__(output = output, debug = debug, verbose = verbose)
 
-        # Get the hardware address as a 48-bit positive integer.
-        mac = getnode()
-        if ((mac >> 40) % 2):
-            # The first time this runs, it may launch a separate program, which could
-            # be quite slow.  If all attempts to obtain the hardware address fail, we
-            # choose a random 48-bit number with its eighth bit set to 1 as recommended
-            # in RFC 4122.
-            raise OSError('MAC address not available')
-        # end if
+        if aid is None:
+            # Get the hardware address as a 48-bit positive integer.
+            mac = getnode()
+            if ((mac >> 40) % 2):
+                # The first time this runs, it may launch a separate program, which could
+                # be quite slow.  If all attempts to obtain the hardware address fail, we
+                # choose a random 48-bit number with its eighth bit set to 1 as recommended
+                # in RFC 4122.
+                raise OSError('MAC address not available')
+            # end if
 
-        # AID = md5(json path + mac address)
-        md5 = hashlib.md5()
-        md5.update(self._json)
-        md5.update('%X' % (mac,))
-        self._aid = md5.hexdigest().upper()
+            # AID = md5(json path + mac address)
+            md5 = hashlib.md5()
+            md5.update(self._json)
+            md5.update('%X' % (mac,))
+            self._aid = md5.hexdigest().upper()
+        else:
+            # In case AID is fixed
+            print "Fixing AID to: " + str(aid)
+            self._aid = aid
 
         with open(join(self._output, 'AID.txt'), 'w') as fo:
             fo.write(self._aid)
