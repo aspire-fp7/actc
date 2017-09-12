@@ -40,7 +40,6 @@
 from os.path                    import dirname
 from os.path                    import isdir
 from shutil                     import copyfile
-from time                       import sleep
 import copy
 
 from actc.tools                 import AbstractBasicPythonTool
@@ -60,11 +59,6 @@ class Copier(AbstractBasicPythonTool):
         '''
         @copydoc actc.tools.AbstractPythonTool._python
         '''
-        # Hack: parallel execution issue (create_folder not yet finished)
-        while (not isdir(dirname(task.targets[0]))):
-            sleep(0.01)
-        # end if
-
         copyfile(list(task.file_dep)[0], task.targets[0])
     # end def _python
 

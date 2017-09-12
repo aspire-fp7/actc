@@ -135,6 +135,7 @@ class CodeSurferInitializer(AbstractCmdTool):
                'actions' : [CmdAction(self._cmd),],
                'targets' : [prj,],
                'file_dep': preps,
+               'task_dep': ['_createfolder_' + path]
                }
 
     # end def tasks

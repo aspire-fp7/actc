@@ -45,8 +45,6 @@ from os.path                    import dirname
 from os.path                    import join
 from os.path                    import isdir
 
-from time                       import sleep
-
 from doit.action                import CmdAction
 
 from actc.tools                 import toList
@@ -196,6 +194,7 @@ class DiabloExtractor(AbstractCmdTool):
                             ],
                'file_dep': [src,
                             ],
+               'task_dep': ['_createfolder_' + path]
                        }
     # end def tasks
 
@@ -257,6 +256,9 @@ class DiabloObfuscator(AbstractCmdTool):
         srcs = toList(args[0])
         dsts = toList(args[1])
 
+        # Process Files
+        path, _ = self._outputs[0]
+
         yield {'name'    : self._name(self._ACTION, srcs, '\ninto', dsts),
                'title'   : self._title,
                'actions' : [CmdAction(self._cmd),],
@@ -295,6 +297,7 @@ class DiabloObfuscator(AbstractCmdTool):
                             ],
                'targets' : dsts,
                'file_dep': srcs,
+               'task_dep' : ['_createfolder_' + path],
                }
     # end def tasks
 
@@ -342,11 +345,6 @@ class RenewableMobileBlocksGenerator(AbstractPythonTool):
         src = task.file_dep
         dst = task.targets[0]
         path = join(dirname(task.targets[0]), dst.split('.', 1)[0])
-
-        # Hack: parallel execution issue (create_folder not yet finished)
-        while (not isdir(dirname(dst))):
-            sleep(0.01)
-        # end if
 
         # Generate renew script
         with open(dst, 'w') as script_file:
@@ -408,6 +406,9 @@ echo "Generation new mobile blocks using random seed ${random_seed}"
         srcs = toList(args[0])
         dsts = toList(args[1])
 
+        # Process Files
+        path, _ = self._outputs[0]
+
         yield {'name'    : self._name(self._ACTION, srcs, '\ninto', dsts),
                'title'   : self._title,
                'actions' : [self._python, ],
@@ -450,6 +451,7 @@ echo "Generation new mobile blocks using random seed ${random_seed}"
                             ],
                'targets' : dsts,
                'file_dep': srcs,
+               'task_dep' : ['_createfolder_' + path],
                }
     #  end def tasks
 # end class RenewableMobileBlocksGenerator

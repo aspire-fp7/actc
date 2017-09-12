@@ -115,7 +115,6 @@ class Preprocessor(AbstractCmdTool):
         # Process Files
         path, ext = self._outputs[0]
 
-
         for arg in toList(args[0]):
             for src in iglob(abspath(arg)):
 
@@ -138,8 +137,8 @@ class Preprocessor(AbstractCmdTool):
                                      'default': src,
                         }],
                        'targets' : [dst, ],
-                       'file_dep': [src, ]
-                                    + headers
+                       'file_dep': [src, ] + headers,
+                       'task_dep' : ['_createfolder_' + path]
                        }
             # end for
         # end for
@@ -225,8 +224,8 @@ class Compiler(AbstractCmdTool):
                                      'default': src,
                         }],
                        'targets' : [dst, ],
-                       'file_dep': [src, ]
-                                    + headers
+                       'file_dep': [src, ] + headers,
+                       'task_dep': ['_createfolder_' + path]
                        }
             # end for
         # end for
@@ -316,8 +315,8 @@ class CompilerSO(AbstractCmdTool):
                                      'default': src,
                         }],
                        'targets' : [dst, ],
-                       'file_dep': [src, ]
-                                    + headers
+                       'file_dep': [src, ] + headers,
+                       'task_dep': ['_createfolder_' + path]
                        }
             # end for
         # end for
@@ -383,6 +382,9 @@ class Linker(AbstractCmdTool):
             return
         # end if
 
+        # Process Files
+        path, _ = self._outputs[0]
+
         dst = toList(args[1])
 
         yield {'name'    : self._name(self._ACTION, objs, '\ninto', dst),
@@ -395,6 +397,7 @@ class Linker(AbstractCmdTool):
                              }],
                'targets' : dst,
                'file_dep': objs,
+               'task_dep' : ['_createfolder_' + path]
                }
 
     # end def tasks

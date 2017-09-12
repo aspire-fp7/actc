@@ -189,12 +189,9 @@ class AbstractTool(object):
         # Create Folders
         for path in set(self._outputDirs):
 
-            if isdir(path):
-                continue
-            # end if
-
             yield {'name'    : self._name('create', path),
                    'title'   : self._title,
+                   'basename' : '_createfolder_' + path,
                    'actions' : [(createFolder, (path,))],
                    'targets' : [path,],
                    'uptodate': [run_once,],
@@ -271,6 +268,7 @@ class AbstractBasicPythonTool(AbstractPythonTool):
                        'actions' : [self._python,],
                        'targets' : [dst,],
                        'file_dep': [src,],
+                       'task_dep': ['_createfolder_' + path]
                        }
             # end for
         # end for
@@ -405,6 +403,7 @@ class AbstractBasicCmdTool(AbstractCmdTool):
                        'actions' : [CmdAction(self._cmd),],
                        'targets' : [dst,],
                        'file_dep': [src,],
+                       'task_dep': ['_createfolder_' + path]
                        }
             # end for
         # end for

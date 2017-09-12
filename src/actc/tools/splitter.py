@@ -121,6 +121,7 @@ class SplitterProcess(AbstractCmdTool):
                                     ],
                        'targets' : [dst,],
                        'file_dep': [src,],
+                       'task_dep': ['_createfolder_' + path]
                        }
             # end for
         # end for
@@ -225,6 +226,7 @@ class SplitterCodeTransformation(AbstractCmdTool):
                                     ],
                        'targets' : [dst,],
                        'file_dep': [src,],
+                       'task_dep': ['_createfolder_' + path]
                        }
             # end for
         # end for

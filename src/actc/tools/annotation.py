@@ -213,6 +213,7 @@ class AnnotationPatcher(AbstractCmdTool):
                'actions' : [CmdAction(self._cmd), ],
                'targets' : [dst, ],
                'file_dep': [patch_file, ],
+               'task_dep': ['_createfolder_' + dst]
                }
 
     # end def tasks

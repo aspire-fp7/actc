@@ -117,6 +117,7 @@ class AttestatorSelector(AbstractCmdTool):
                              },
                             ],
                'file_dep': src,
+               'task_dep': ['_createfolder_' + path]
                }
 
     # end def tasks

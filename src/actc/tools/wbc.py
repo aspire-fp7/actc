@@ -45,7 +45,6 @@ from os.path                    import join
 from os.path                    import getsize
 from os.path                    import isdir
 from shutil                     import copyfile
-from time                       import sleep
 
 from doit.action                import CmdAction
 
@@ -207,6 +206,7 @@ class WbcLicenseTool(AbstractCmdTool):
                             },
                            ],
                'targets' : [dst, ],
+               'task_dep': ['_createfolder_' + path]
                }
     # end for
     #  end def tasks
@@ -286,6 +286,7 @@ class WbcWhiteBoxTool(AbstractCmdTool):
                                ],
                    'targets' : [dst,],
                    'file_dep': [src,],
+                   'task_dep': ['_createfolder_' + path]
                    }
         # end for
     # end def tasks
@@ -356,6 +357,7 @@ class WbcHeaderIncluder(AbstractPythonTool):
                        'actions' : [self._python,],
                        'targets' : [dst,],
                        'file_dep': [src,],
+                       'task_dep': ['_createfolder_' + path]
                        }
             # end for
         # end for
@@ -584,11 +586,6 @@ class WbcRenewabilityGenerator(AbstractPythonTool):
         path = join(dirname(task.targets[0]), dst.split('.', 1)[0])
         license_file = dst.split('.', 1)[0] + '.lic'
 
-        # Hack: parallel execution issue (create_folder not yet finished)
-        while (not isdir(dirname(dst))):
-            sleep(0.01)
-        # end if
-
         # Generate renew script
         with open(dst, 'w') as script_file:
             script_file.write(
@@ -761,6 +758,7 @@ fi
                             ],
                        'targets' : [dst, ],
                        'file_dep': [src, ],
+                       'task_dep': ['_createfolder_' + path]
                        }
             # end for
         # end for
