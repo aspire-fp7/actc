@@ -3273,8 +3273,7 @@ class Actc(AbstractDodo):                                                       
                      'android'      : '/opt/diablo-android-gcc-toolchain/bin/arm-linux-androideabi-gcc',
                      'serverlinux'  : 'gcc'}
 
-        tool = Compiler(program = frontends[self._config.platform],
-                        options =   self._config.src2bin.PREPROCESS.options +
+        tool_options = self._config.src2bin.PREPROCESS.options + \
                                     ['-I', self.accl_headers,
                                     '-I', self.curl_headers,
                                     '-I', self.websocket_headers,
@@ -3298,7 +3297,14 @@ class Actc(AbstractDodo):                                                       
                                     '-DACCL_FILE_PATH=\\"%(PATH)s\\"'
                                             % {'PATH' : self._config.src2bin.COMPILE_ACCL.file_path},
                                     '-lz',
-                                    '-fPIC',],
+                                    '-fPIC']
+
+        # enable the APPLY_RENEWABILITY flag for the accl if renewability is not excluded
+        if not (self._config.SERVER.excluded or self._config.SERVER.RENEWABILITY.excluded) and self._binary_annotations['code_mobility']:
+            tool_options.append('-DAPPLY_RENEWABILITY')
+
+        tool = Compiler(program = frontends[self._config.platform],
+                        options = tool_options,
                         outputs = (dst, '.o'))
 
         yield tool.tasks(src)
