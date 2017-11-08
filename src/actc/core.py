@@ -3588,7 +3588,7 @@ class Actc(AbstractDodo):                                                       
 
         src = [join(self._output, annotations_folder, 'annotations.json'),
                 join(self._output, linker_folder, cbin),
-                join(self._output, sp_folder, 'profiles', 'profiling_section.' + cbin + '.self_profiling.plaintext')]
+                join(self._output, sp_folder, 'profiles', 'profiling_data.' + cbin + '.self_profiling.plaintext')]
 
         dst = join(self._output, output_folder)
 
@@ -3969,6 +3969,21 @@ class Actc(AbstractDodo):                                                       
             dot.append(xtranslator_obj)
         # end if
 
+        if(self._config.bin2bin.BLP04['self-profiling']):
+            obj = 'none'
+            if (self._config.platform == 'linux'):
+                obj = DIABLO_SP_OBJ_LINUX
+
+            elif (self._config.platform == 'android'):
+                obj = DIABLO_SP_OBJ_ANDROID
+
+            else:
+                assert False, 'Unknown platform: %s\n' % self._config.platform
+            # end if
+            src.append(obj)
+            dot.append(obj)
+        # end if
+
 #         if (self._binary_annotations['dcl']):
 #             src.append(join(self._folders['SLP11']['out'] + self._folders['SLP11']['suffix'], 'dist/libs/armeabi-v7a'))
 #             dot.append(join(self._folders['SLP11']['out'] + self._folders['SLP11']['suffix'], 'dist/libs/armeabi-v7a'))
@@ -4095,14 +4110,14 @@ class Actc(AbstractDodo):                                                       
             dbin = self._config.src2bin.LINK.binary
         #end if
 
-        src_profile = join(self._output, profile_folder, 'profiles', 'profiling_section.' + cbin + '.self_profiling.plaintext')
+        src_profile = join(self._output, profile_folder, 'profiles', 'profiling_data.' + cbin + '.self_profiling.plaintext')
 
         if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(src_profile))):
             return
 
         # translate the BC02 profile so it is compatible with BC04 (the instruction addresses have changed)
         dst = join(self._output, 'BLP03_migrate_profile', 'profiles')
-        dst_profile = join(dst, 'profiling_section.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
+        dst_profile = join(dst, 'profiling_data.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
 
         tool = ProfileTranslator(options =    ['-p', src_profile]
                                             + ['-q', dst_profile]
@@ -4172,7 +4187,7 @@ class Actc(AbstractDodo):                                                       
             dst.append(join(self._output, output_folder, 'mobile_blocks'))
 
         # runtime profiles
-        profiles = join(self._output, profile_folder, 'profiles', 'profiling_section.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
+        profiles = join(self._output, profile_folder, 'profiles', 'profiling_data.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
         if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(profiles))):
             profiles = None
         else:
@@ -4190,17 +4205,7 @@ class Actc(AbstractDodo):                                                       
         options.append('-CFT %s' % ('on' if self._binary_annotations['cf_tagging'] else 'off'))
 
         if(self._config.bin2bin.BLP04['self-profiling']):
-            obj = 'none'
-            if (self._config.platform == 'linux'):
-                obj = DIABLO_SP_OBJ_LINUX
-
-            elif (self._config.platform == 'android'):
-                obj = DIABLO_SP_OBJ_ANDROID
-
-            else:
-                assert False, 'Unknown platform: %s\n' % self._config.platform
-            # end if
-            options.extend(['-SP', obj])
+            options.extend(['-SP', 'none'])
         # end if
 
         # instanciate tool
@@ -4260,8 +4265,7 @@ class Actc(AbstractDodo):                                                       
         '''
         # Check configuration
         self._skip_BLP04_DYN = self._config.bin2bin.excluded \
-                        or self._config.bin2bin.BLP04_DYN.excluded \
-                        or self._skip_BLP00 #No runtime profiles have been generated
+                        or self._config.bin2bin.BLP04_DYN.excluded
 
     # end def task_BLP04_DYN
 
@@ -4283,7 +4287,7 @@ class Actc(AbstractDodo):                                                       
         output_folder = input_folder  # BC05
 
         # ----------------------------------------------------------------------
-        src = join(self._output, input_folder, 'mobile_blocks.self_profiling')
+        src = join(self._output, input_folder, 'mobile_blocks')
         dst = join(src, '.p20_sp_done')
 
         if (not (isdir(src) and self._config.SERVER.P20.script)):
@@ -4462,14 +4466,14 @@ class Actc(AbstractDodo):                                                       
             dst.append(join(self._output, output_folder, 'mobile_blocks'))
 
         # runtime profiles
-        profiles = join(self._output, profile_folder, 'profiles', 'profiling_section.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
+        profiles = join(self._output, profile_folder, 'profiles', 'profiling_data.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
         if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(profiles))):
             profiles = None
         else:
             src.append(profiles)
 
         # runtime profiles
-        profiles_obf = join(self._output, obfuscator_folder, 'profiles', 'profiling_section.' + cbin + '.self_profiling.plaintext')
+        profiles_obf = join(self._output, obfuscator_folder, 'profiles', 'profiling_data.' + cbin + '.self_profiling.plaintext')
         if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(profiles_obf))):
             profiles_obf = None
         else:

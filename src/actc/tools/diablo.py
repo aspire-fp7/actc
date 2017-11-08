@@ -522,10 +522,9 @@ def generateDiabloCommand(program, options, self_profiling, softvm_diversity_see
         args.append('--blockprofilefile')
         args.append(runtime_profiles)
 
-# TODO BART uncomment this when obfuscated runtime profiles are supported
-#     if(runtime_profiles_obf):
-#         args.append('--blockprofilefile-obfuscated')
-#         args.append(runtime_profiles_obf)
+    if(runtime_profiles_obf):
+        args.append('--postblockprofilefile')
+        args.append(runtime_profiles_obf)
 
     # -O <objdir>:<stubdir>:<vmdir>
     args.append('-O')
