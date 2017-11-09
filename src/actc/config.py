@@ -444,7 +444,7 @@ class Config(AttrDict):
               # code mobility
               'P20'   : {'script' : '/opt/code_mobility/deploy_application.sh"'},
               # remote attestation
-              'P80'   : {'script' : '/opt/RA/deploy/deploy.sh'},
+              'P80'   : {'script' : '/opt/remote_attestation/scripts/deploy.sh'},
               # renewability
               'RENEWABILITY' : {
                   "excluded"              : False,

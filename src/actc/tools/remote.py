@@ -50,7 +50,7 @@ from actc.tools                 import toList
 # implementation
 # ------------------------------------------------------------------------------
 
-ATTESTATOR_SELECTOR = '/opt/RA/attestator_selector.sh'
+ATTESTATOR_SELECTOR = '/opt/remote_attestation/scripts/attestator_selector.sh'
 
 class AttestatorSelector(AbstractCmdTool):
     '''
