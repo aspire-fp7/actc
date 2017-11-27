@@ -3151,6 +3151,8 @@ class Actc(AbstractDodo):                                                       
         self._binary_annotations['softvm'] &= self._config.bin2bin.BLP04['softvm']
         self._binary_annotations['code_mobility'] &= self._config.bin2bin.BLP04['code_mobility']  # disabled in json
         self._binary_annotations['code_mobility'] |= (self._binary_annotations['softvm'] and softvm_code_mobility)  # turn on for mobile softvm code
+        # enable renewability based on SERVER.RENEWABILITY settings and 'code_mobility'
+        self._binary_annotations['renewability'] = not (self._config.SERVER.excluded or self._config.SERVER.RENEWABILITY.excluded) and self._binary_annotations['code_mobility']
     # end def task_SLP04_PARSE
 
     # ==========================================================================
@@ -3298,10 +3300,6 @@ class Actc(AbstractDodo):                                                       
                                             % {'PATH' : self._config.src2bin.COMPILE_ACCL.file_path},
                                     '-lz',
                                     '-fPIC']
-
-        # enable the APPLY_RENEWABILITY flag for the accl if renewability is not excluded
-        if not (self._config.SERVER.excluded or self._config.SERVER.RENEWABILITY.excluded) and self._binary_annotations['code_mobility']:
-            tool_options.append('-DAPPLY_RENEWABILITY')
 
         tool = Compiler(program = frontends[self._config.platform],
                         options = tool_options,
@@ -3956,11 +3954,13 @@ class Actc(AbstractDodo):                                                       
         # end if
 
         if (self._binary_annotations['code_mobility']):
-            src.extend([join(binder_obj, 'binder.o'),
-                        join(downloader_obj, 'downloader.o'),
-                        join(renewability_obj, 'renewability.o')])
+            src.extend([join(binder_obj, 'binder.o'), join(downloader_obj, 'downloader.o')])
+            dot.extend([binder_obj, downloader_obj])
 
-            dot.extend([binder_obj, downloader_obj, renewability_obj])
+            # link in renewability object if requested
+            if self._binary_annotations['renewability']:
+                src.append(join(renewability_obj, 'renewability.o'))
+                dot.append(renewability_obj)
         # end if
 
         if (self._binary_annotations['anti_debugging']):
