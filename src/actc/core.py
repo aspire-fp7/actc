@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------------------
 # Copyright (c) 2014-2016 Nagravision S.A., Gemalto S.A., Ghent University
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -400,7 +400,7 @@ class Actc(AbstractDodo):                                                       
         if (self._skip_SLP01):
             return
         # end if
-        
+
         # input and output folders
         input_folder = self._folders['SLP01']['out'] + self._folders['SLP01']['suffix']
         output_folder = self._folders['SPLIT_C']['out'] + self._folders['SPLIT_C']['suffix']
@@ -2146,7 +2146,7 @@ class Actc(AbstractDodo):                                                       
 
         # ----------------------------------------------------------------------
         self._updateDot('SLP09_01_AC', input_folder, output_folder)
-    # end def task_SLP09_01_AC   
+    # end def task_SLP09_01_AC
 
     # ==========================================================================
     def task_SLP09_02_PREPROCESS(self):
@@ -4000,11 +4000,11 @@ class Actc(AbstractDodo):                                                       
             or self._binary_annotations['anti_cloning']
             or self._binary_annotations['timebombs']
             or self._binary_annotations['dcl']):
-                
+
             src.extend([join(self.curl_lib, 'libcurl.a'),
                     join(self.openssl_lib, 'libssl.a'),
                     join(self.openssl_lib, 'libcrypto.a')])
-                    
+
             dot.extend([self.curl_lib, self.openssl_lib])
         # end if
 
@@ -4152,8 +4152,8 @@ class Actc(AbstractDodo):                                                       
     def task_BLP04_OBFUSCATE(self):
         '''
         BC04 + D01 (+ BC08 + BC03 + BLC02 (+ BC02_SP/profiles)) --> obfuscation --> BC05
-        
-        #WARNING:  update task_BLP04_DYN_02 accordingly 
+
+        #WARNING:  update task_BLP04_DYN_02 accordingly
 
         @return (Task)
         '''
@@ -4427,8 +4427,8 @@ class Actc(AbstractDodo):                                                       
     def task_BLP04_DYN_02(self):
         '''
         BC04 + BC05/profiles + D01 (+ BC08 + BC03 + BLC02 --> recompile using execution profile and calculate dynamic metrics--> BC05_DYN
-        
-        #WARNING:  update task_BLP04_OBFUSCATE accordingly 
+
+        #WARNING:  update task_BLP04_OBFUSCATE accordingly
 
         @return (Task)
         '''
@@ -4664,7 +4664,7 @@ class Actc(AbstractDodo):                                                       
     # ==========================================================================
     def task_SERVER_RENEWABILITY_CREATE(self):
         '''
-        Server side management -  renewability - register application 
+        Server side management -  renewability - register application
 
         @return (Task)
         '''
@@ -4932,7 +4932,7 @@ class Actc(AbstractDodo):                                                       
              cwd = self._output)
 
     # end def processDot
-    
+
     def _create_symlinks(self):
         '''
         Creates symlinks to the cached folders

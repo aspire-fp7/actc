@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------------------
 # Copyright (c) 2014-2016 Nagravision S.A., Gemalto S.A., Ghent University
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -1036,7 +1036,7 @@ class Config(AttrDict):
     // vanilla self-profiling
     "BLP00": {
       "excluded": %(EXCLUDED)s,
-    
+
 ''' % {'EXCLUDED': self._item2json(self.bin2bin.BLP00.excluded)
        })
 
