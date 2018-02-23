@@ -1223,8 +1223,14 @@ class Actc(AbstractDodo):                                                       
 
         dst = join(self._output, output_folder)
 
+        # C standard
+        c_standard = "c99"
+        if self._config.src2bin.PREPROCESS.c_standard:
+            c_standard = self._config.src2bin.PREPROCESS.c_standard
+
         tool = Preprocessor(program = self._config.tools.frontend,
                             options = self._config.src2bin.options
+                                    + ['-std=%s' % (c_standard)]
                                     + self._config.src2bin.PREPROCESS.options
                                     + ['-D', 'ASPIRE_AID=%s' % (self._aid,)],
                             outputs = (dst, '.i'))

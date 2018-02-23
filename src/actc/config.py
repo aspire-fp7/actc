@@ -340,6 +340,7 @@ class Config(AttrDict):
 
               'PREPROCESS': {
                   'options': [],
+                  'c_standard': '',
                   },
 
               'COMPILE' : {
@@ -967,9 +968,11 @@ class Config(AttrDict):
       // -isystem <dir>
       // -include <file>
       // -D<macro[=defn]>
-      "options"    : %(OPTIONS)s
+      "options"    : %(OPTIONS)s,
+      "c_standard": %(CSTANDARD)s
     },
 ''' % {'OPTIONS' : self._item2json(self.src2bin.PREPROCESS.options, sort = True),
+        'CSTANDARD': self._item2json(self.src2src.SLP02.c_standard),
        })
 
         lines.append('''\

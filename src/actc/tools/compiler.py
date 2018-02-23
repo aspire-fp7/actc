@@ -85,7 +85,6 @@ class Preprocessor(AbstractCmdTool):
 
         # options
         args.extend(self._options)
-        args.append('-std=c99')
         args.append('-E')
         args.append('-P')
 
