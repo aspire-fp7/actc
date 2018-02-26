@@ -54,6 +54,7 @@ from actc.tools.diablo          import DIABLO_OBFUSCATOR
 from actc.tools.diablo          import DIABLO_SELFPROFILING
 from actc.tools.codesurfer      import CSURF
 from actc.tools.compiler        import FRONTEND
+from actc.tools.compiler        import FRONTEND_FORTRAN
 from actc.tools.remote          import ATTESTATOR_SELECTOR
 from actc.tools.remote          import ANTI_CLONING
 from actc.tools.remote          import REACTION_UNIT
@@ -192,6 +193,7 @@ class Config(AttrDict):
               'cft':                    CFT,
               # src2bin
               'frontend':               FRONTEND,
+              'frontend_fortran':       FRONTEND_FORTRAN,
               # bin2bin
               'extractor':              DIABLO_EXTRACTOR,
               'xtranslator':            XTRANSLATOR,
@@ -669,6 +671,7 @@ class Config(AttrDict):
     "cft":                    %(CFT)s,
     // src2bin
     "frontend":               %(FRONTEND)s,
+    "frontend_fortran":       %(FRONTEND_FORTRAN)s,
     // bin2bin
     "extractor":              %(EXTRACTOR)s,
     "xtranslator":            %(XTRANSLATOR)s,
@@ -697,6 +700,7 @@ class Config(AttrDict):
        'DCL':                    self._item2json(self.tools.dcl),
        'CFT':                    self._item2json(self.tools.cft),
        'FRONTEND':               self._item2json(self.tools.frontend),
+       'FRONTEND_FORTRAN':       self._item2json(self.tools.frontend_fortran),
        'EXTRACTOR':              self._item2json(self.tools.extractor),
        'CODE_MOBILITY':          self._item2json(self.tools.code_mobility),
        'ACCL':                   self._item2json(self.tools.accl),

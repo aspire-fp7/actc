@@ -58,6 +58,7 @@ from actc.tools                 import toList
 # ------------------------------------------------------------------------------
 
 FRONTEND = 'gcc'
+FRONTEND_FORTRAN = 'gfortran'
 
 class Preprocessor(AbstractCmdTool):
     '''

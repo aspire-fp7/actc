@@ -276,10 +276,12 @@ class Actc(AbstractDodo):                                                       
         self._folders['SLP11'] = {'out': 'SC11', 'suffix' : ''}  # DCL
         self._folders['SLP12'] = {'out': 'SC12', 'out_be': 'SC12.01', 'suffix': ''}  # Control Flow Tagging, with BackEnd output
         self._folders['SPLIT_CPP'] = {'out': 'SC12', 'suffix' : ''}  # Changed order to make sure suffix is calculated correctly
+        self._folders['SPLIT_FORTRAN'] = {'out': 'SC12', 'suffix' : ''}  # Changed order to make sure suffix is calculated correctly
         self._folders['SLP04'] = {'out': 'D01', 'suffix' : ''}  # Annotation extraction
         self._folders['SLP07'] = {'out': 'BC07', 'suffix' : ''}  # Remote attestation
         self._folders['COMPILE_C'] = {'out': 'BC08', 'suffix' : ''}  # Compile C files
         self._folders['COMPILE_CPP'] = {'out': 'BC08', 'suffix' : ''}  # Compile CPP files, same as COMPILE_C
+        self._folders['COMPILE_FORTRAN'] = {'out': 'BC08', 'suffix' : ''}  # Compile Fortran files
         self._folders['ACCL'] = {'out': 'BC08', 'suffix' : ''}  # Compile ACCL files
         self._folders['LINK'] = {'out': 'BC02', 'suffix' : ''}  # Linker
 
@@ -454,6 +456,37 @@ class Actc(AbstractDodo):                                                       
         self._updateDot('SPLIT_CPP', input_folder, output_folder)
     # end def task_SPLIT_CPP
 
+    # ==========================================================================
+    def task_SPLIT_FORTRAN(self):
+        '''
+        SC02 --> split source code (.f) --> SC012
+
+        @return (Task)
+        '''
+        # Check configuration
+        # ----------------------------------------------------------------------
+        if (self._skip_SLP01):
+            return
+        # end if
+
+        # input and output folders
+        input_folder = self._folders['SLP01']['out'] + self._folders['SLP01']['suffix']
+        output_folder = self._folders['SPLIT_FORTRAN']['out'] + self._folders['SPLIT_FORTRAN']['suffix']
+
+        # Split *.f
+        # ----------------------------------------------------------------------
+        src  = [join(self._output, input_folder, '*.f'),
+                join(self._output, input_folder, '*.f90')]
+
+        dst  =  join(self._output, output_folder)
+
+        tool = Copier(outputs = (dst, ''))
+
+        yield tool.tasks(src)
+
+        # ----------------------------------------------------------------------
+        self._updateDot('SPLIT_FORTRAN', input_folder, output_folder)
+    # end def task_SPLIT_FORTRAN
 
     # ==========================================================================
     def task_SLP03(self):
@@ -3245,6 +3278,47 @@ class Actc(AbstractDodo):                                                       
         # ----------------------------------------------------------------------
         self._updateDot('COMPILE_CPP', input_folder, output_folder)
     # end def task_COMPILE_CPP
+
+    # ==========================================================================
+    def task_COMPILE_FORTRAN(self):
+        '''
+        SC12 --> compiler --> BC08
+
+        @return (Task)
+        '''
+        # Check configuration
+        # ----------------------------------------------------------------------
+        if (self._config.src2bin.excluded):
+            return
+        # end if
+
+        # input and output folders
+        input_folder = self._folders['SLP12']['out'] + self._folders['SLP04']['suffix']  # cached output of SLP09 with inserted annotations in SLP04
+        output_folder = self._folders['COMPILE_FORTRAN']['out'] + self._folders['COMPILE_FORTRAN']['suffix']
+
+        # SC12/*.cpp --> BC08/*.o
+        # ----------------------------------------------------------------------
+        src = [join(self._output, input_folder, '*.f'),
+                join(self._output, input_folder, '*.f90')]
+
+        dst = join(self._output, output_folder)
+
+        tool = Compiler(program = self._config.tools.frontend_fortran,
+                        options = self._config.src2bin.options
+                                + self._config.src2bin.PREPROCESS.options
+                                + ['-D', 'ASPIRE_AID=%s' % (self._aid,)]
+                                + self._config.src2bin.COMPILE.options
+                                + ['-g',
+                                   '-mfloat-abi=softfp',
+                                   '-msoft-float',
+                                   '-mfpu=neon'],
+                        outputs = (dst, '.o'))
+
+        yield tool.tasks(src, header_files=[])
+
+        # ----------------------------------------------------------------------
+        self._updateDot('COMPILE_FORTRAN', input_folder, output_folder)
+    # end def task_COMPILE_ FORTRAN
 
     # ==========================================================================
     def task_COMPILE_ACCL(self):
