@@ -3548,9 +3548,7 @@ class Actc(AbstractDodo):                                                       
 
 
         # ----------------------------------------------------------------------
-
-        cbin = self._config.src2bin.LINK.binary
-        dbin = self._config.src2bin.LINK.binary
+        cbin, dbin = self._outfilenames()
 
 
         src = [join(self._output, annotations_folder, 'annotations.json'),
@@ -3604,13 +3602,7 @@ class Actc(AbstractDodo):                                                       
         output_folder = input_folder  # BC02_SP
 
         # ----------------------------------------------------------------------
-
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-        else:
-            cbin = self._config.src2bin.LINK.binary
-        # end if
+        cbin, _ = self._outfilenames()
 
         src = join(self._output, input_folder)
 
@@ -3660,15 +3652,7 @@ class Actc(AbstractDodo):                                                       
         output_folder = self._folders['BLP00']['out_dyn'] + self._folders['BLP00']['suffix']  # BC02_DYN
 
         # ----------------------------------------------------------------------
-
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.')
-        else:
-            cbin = self._config.src2bin.LINK.binary
-            dbin = self._config.src2bin.LINK.binary
-        #end if
+        cbin, dbin = self._outfilenames()
 
         src = [join(self._output, annotations_folder, 'annotations.json'),
                 join(self._output, linker_folder, cbin),
@@ -4154,12 +4138,7 @@ class Actc(AbstractDodo):                                                       
 
         dst = join(self._output, output_folder)
 
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            binary = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-        else:
-            binary = self._config.src2bin.LINK.binary
-        #end if
+        binary, _ = self._outfilenames()
 
         binary = join(dst, binary)
 
@@ -4187,14 +4166,7 @@ class Actc(AbstractDodo):                                                       
         # runtime profiles
         profile_folder = self._folders['BLP00']['out_sp'] + self._folders['BLP00']['suffix']  # BC02_SP
 
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.')
-        else:
-            cbin = self._config.src2bin.LINK.binary
-            dbin = self._config.src2bin.LINK.binary
-        #end if
+        cbin, _ = self._outfilenames()
 
         src_profile = join(self._output, profile_folder, 'profiles', 'profiling_data.' + cbin + '.self_profiling.plaintext')
 
@@ -4253,15 +4225,7 @@ class Actc(AbstractDodo):                                                       
         output_folder = self._folders['BLP04']['out'] + self._folders['BLP04']['suffix']  # BC05
 
         # ----------------------------------------------------------------------
-
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.')
-        else:
-            cbin = self._config.src2bin.LINK.binary
-            dbin = self._config.src2bin.LINK.binary
-        #end if
+        cbin, dbin = self._outfilenames()
 
         # source
         src = [join(self._output, annotations_folder, 'annotations.json'),
@@ -4422,12 +4386,7 @@ class Actc(AbstractDodo):                                                       
         src = join(self._output, input_folder)
         dst = join(src, '.p80_sp_done')
 
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.') + '.self_profiling'
-        else:
-            dbin = self._config.src2bin.LINK.binary + '.self_profiling'
-        # end if
+        _, dbin = self._outfilenames()
 
         if (not (isdir(src) and self._config.SERVER.P80.script)):
             return
@@ -4473,13 +4432,7 @@ class Actc(AbstractDodo):                                                       
         output_folder = input_folder  # BC05
 
         # ----------------------------------------------------------------------
-
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-        else:
-            cbin = self._config.src2bin.LINK.binary
-        # end if
+        cbin, _ = self._outfilenames()
 
         src = join(self._output, input_folder)
 
@@ -4532,15 +4485,7 @@ class Actc(AbstractDodo):                                                       
         output_folder = self._folders['BLP04_DYN']['out'] + self._folders['BLP04_DYN']['suffix']  # BC05_DYN
 
         # ----------------------------------------------------------------------
-
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.')
-        else:
-            cbin = self._config.src2bin.LINK.binary
-            dbin = self._config.src2bin.LINK.binary
-        # end if
+        cbin, dbin = self._outfilenames()
 
         # source
         src = [join(self._output, annotations_folder, 'annotations.json'),
@@ -4714,12 +4659,7 @@ class Actc(AbstractDodo):                                                       
         src = join(self._output, input_folder)
         dst = join(src, '.p80done')
 
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.')
-        else:
-            dbin = self._config.src2bin.LINK.binary
-        #end if
+        _, dbin = self._outfilenames()
 
         if (not (isdir(src) and self._config.SERVER.P80.script)):
             return
@@ -5044,6 +4984,17 @@ class Actc(AbstractDodo):                                                       
                                'dsts': toList(dst)})
     # end def _dot
 
+    def _outfilenames(self):
+        # a.out|liba.so --> c.out|libc.so
+        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
+            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
+            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.')
+        else:
+            cbin = self._config.src2bin.LINK.binary
+            dbin = self._config.src2bin.LINK.binary
+        #end if
+
+        return cbin, dbin
 
 
 # end class Actc
