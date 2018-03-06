@@ -3437,6 +3437,18 @@ class Actc(AbstractDodo):                                                       
             dot.extend([self.curl_lib, self.openssl_lib])
         # end if
 
+        if (self._config.platform == 'linux'):
+            obj = DIABLO_SP_OBJ_LINUX
+
+        elif (self._config.platform == 'android'):
+            obj = DIABLO_SP_OBJ_ANDROID
+
+        else:
+            assert False, 'Unknown platform: %s\n' % self._config.platform
+        # end if
+        src.append(obj)
+        dot.append(obj)
+
 #         if (self._binary_annotations['dcl']):
 #             print('----------------------APPENDING DCL!!!')
 #             src.append(join(self._folders['SLP11']['out'] + self._folders['SLP11']['suffix'], 'dist/libs/armeabi-v7a'))
@@ -3557,19 +3569,9 @@ class Actc(AbstractDodo):                                                       
         dst = join(self._output, output_folder)
 
 
-        obj = 'none'
-        if (self._config.platform == 'linux'):
-            obj = DIABLO_SP_OBJ_LINUX
-
-        elif (self._config.platform == 'android'):
-            obj = DIABLO_SP_OBJ_ANDROID
-
-        else:
-            assert False, 'Unknown platform: %s\n' % self._config.platform
-
         tool = DiabloObfuscator(program = self._config.tools.obfuscator_sp,
                                 options = self._config.bin2bin.BLP00._01.options
-                                + ['-SP', obj],
+                                + ['-SP', 'none'],
                                 aid=self._aid,
                                 outputs = (dst, ''),
                                 self_profiling = True)
