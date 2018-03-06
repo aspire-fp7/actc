@@ -4448,6 +4448,9 @@ class Actc(AbstractDodo):                                                       
 
         dst = join(src, 'profiles', '.BLP04_DYN_01done')
 
+        p20_sp_done = join(self._output, self._folders['BLP04']['out'] + self._folders['BLP04']['suffix'], 'mobile_blocks', '.p20_sp_done')
+        p80_sp_done = join(self._output, self._folders['SLP07']['out'] + self._folders['SLP07']['suffix'], '.p80_sp_done')
+
         if (not (isdir(src) and self._config.bin2bin.BLP04_DYN._01.script and isfile(self._config.bin2bin.BLP04_DYN._01.script))):
             return
         # end if
@@ -4463,7 +4466,7 @@ class Actc(AbstractDodo):                                                       
                'file_dep': glob(join(src, cbin + '*')),
                }
         # ----------------------------------------------------------------------
-        self._updateDot('BLP04_DYN_01', input_folder, output_folder)
+        self._updateDot('BLP04_DYN_01', [input_folder, p20_sp_done, p80_sp_done], output_folder)
     # end def _task_BLP04_DYN_01
 
     # ==========================================================================
