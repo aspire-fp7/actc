@@ -113,7 +113,7 @@ class DiabloExtractor(AbstractCmdTool):
 
     _ACTION = 'extract'
 
-    def _cmd(self, task, annotfile, objdir, bindir, binary):                                                       # pylint:disable=W0221
+    def _cmd(self, task, annotfile, objdir, bindir, runtime_profiles, binary):                                                       # pylint:disable=W0221
         '''
         @copydoc actc.tools.AbstractCmdTool._cmd
         '''
@@ -147,6 +147,14 @@ class DiabloExtractor(AbstractCmdTool):
         args.append('--dots-before-path')
         args.append(join(bindir, 'diablo-extractor-dots-before'))
 
+        if(runtime_profiles):
+            args.append('--rawprofiles')
+            args.append('off')
+
+        if(runtime_profiles):
+            args.append('--blockprofilefile')
+            args.append(runtime_profiles)
+
         # <binary>
         args.append(binary)
 
@@ -167,15 +175,15 @@ class DiabloExtractor(AbstractCmdTool):
         # Process Files
         path, _ = self._outputs[0]
 
-        src = args[0]
-        dst = join(path, basename(src).split('.', 1)[0] + '_chunks.json')
+        srcs = toList(args[0])
+        dst = join(path, basename(srcs[0]).split('.', 1)[0] + '_chunks.json')
 
-        yield {'name'    : self._name(self._ACTION, src, '\ninto', dst),
+        yield {'name'    : self._name(self._ACTION, srcs, '\ninto', dst),
                'title'   : self._title,
                'actions' : [CmdAction(self._cmd),],
                'params'  : [{'name'   : 'annotfile',
                              'short'  : None,
-                             'default': src,
+                             'default': srcs[0],
                              },
                             {'name'   : 'objdir',
                              'short'  : None,
@@ -185,6 +193,10 @@ class DiabloExtractor(AbstractCmdTool):
                              'short'  : None,
                              'default': kwargs.get('bindir', '.'),
                              },
+                            {'name'   : 'runtime_profiles',
+                             'short'  : None,
+                             'default': kwargs.get('runtime_profiles', None),
+                             },
                             {'name'   : 'binary',
                              'short'  : None,
                              'default': kwargs.get('binary'),
@@ -192,8 +204,7 @@ class DiabloExtractor(AbstractCmdTool):
                             ],
                'targets' : [dst,
                             ],
-               'file_dep': [src,
-                            ],
+               'file_dep': srcs,
                'task_dep': ['_createfolder_' + path]
                        }
     # end def tasks

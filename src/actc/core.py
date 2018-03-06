@@ -3743,7 +3743,14 @@ class Actc(AbstractDodo):                                                       
 
         #
         # ----------------------------------------------------------------------
-        src = join(self._output, annotations_folder, 'annotations.json')
+        src = [join(self._output, annotations_folder, 'annotations.json')]
+
+        profile_folder = self._folders['BLP00']['out_sp'] + self._folders['BLP00']['suffix']  # BC02_SP
+        profiles = join(self._output, profile_folder, 'profiles', 'profiling_data.' + self._config.src2bin.LINK.binary + '.self_profiling.plaintext')
+        if not isfile(profiles):
+            profiles = None
+        else:
+            src.append(profiles)
 
         dst = join(self._output, output_folder)
 
@@ -3756,7 +3763,8 @@ class Actc(AbstractDodo):                                                       
         yield tool.tasks(src,
                          objdir=join(self._output, object_folder),
                          bindir=join(self._output, linker_folder),
-                         binary=join(self._output, linker_folder, self._config.src2bin.LINK.binary))
+                         binary=join(self._output, linker_folder, self._config.src2bin.LINK.binary),
+                         runtime_profiles=profiles)
 
         # ----------------------------------------------------------------------
         self._updateDot('BLP01_EXTRACT', [linker_folder, object_folder, annotations_folder], output_folder)
