@@ -285,7 +285,7 @@ class Actc(AbstractDodo):                                                       
         self._folders['ACCL'] = {'out': 'BC08', 'suffix' : ''}  # Compile ACCL files
         self._folders['LINK'] = {'out': 'BC02', 'suffix' : ''}  # Linker
 
-        self._folders['BLP00'] = {'out_sp': 'BC02_SP', 'out_dyn': 'BC02_DYN', 'suffix' : ''}  # Self-profiling binaries on vanilla
+        self._folders['BLP00'] = {'out_sp': 'BC02_SP', 'out_dyn': 'BC02_DYN', 'out_migrate': 'profile_BC02_migrated_to_BC04', 'suffix' : ''}  # Self-profiling binaries on vanilla
         self._folders['BLP01'] = {'out': 'BLC02', 'suffix' : ''}  # Extractor
         self._folders['BLP02'] = {'out': 'BC03', 'suffix' : ''}
         self._folders['BLP03'] = {'out': 'BC04', 'suffix' : ''}
@@ -4184,8 +4184,8 @@ class Actc(AbstractDodo):                                                       
             return
 
         # translate the BC02 profile so it is compatible with BC04 (the instruction addresses have changed)
-        dst = join(self._output, 'BLP03_migrate_profile', 'profiles')
-        dst_profile = join(dst, 'profiling_data.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
+        dst = join(self._output, self._folders['BLP00']['out_migrate'] + self._folders['BLP00']['suffix'])
+        dst_profile = join(dst, 'profiling_data.' + cbin + '.self_profiling.plaintext')
 
         tool = ProfileTranslator(options =    ['-p', src_profile]
                                             + ['-q', dst_profile]
@@ -4231,7 +4231,6 @@ class Actc(AbstractDodo):                                                       
         xtranslator_folder = self._folders['BLP02']['out'] + self._folders['BLP02']['suffix']  # BC03
         linker_folder = self._folders['BLP03']['out'] + self._folders['BLP03']['suffix']  # BC04
         extractor_folder = self._folders['BLP01']['out'] + self._folders['BLP01']['suffix']  # BLC02
-        profile_folder = join(self._output, 'BLP03_migrate_profile')
         output_folder = self._folders['BLP04']['out'] + self._folders['BLP04']['suffix']  # BC05
 
         # ----------------------------------------------------------------------
@@ -4247,7 +4246,8 @@ class Actc(AbstractDodo):                                                       
             dst.append(join(self._output, output_folder, 'mobile_blocks'))
 
         # runtime profiles
-        profiles = join(self._output, profile_folder, 'profiles', 'profiling_data.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
+        profiles = join(self._output, self._folders['BLP00']['out_migrate'] + self._folders['BLP00']['suffix'], 'profiling_data.' + cbin + '.self_profiling.plaintext')
+
         if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(profiles))):
             profiles = None
         else:
@@ -4489,7 +4489,7 @@ class Actc(AbstractDodo):                                                       
 
         # input and output folders
         annotations_folder = self._folders['SLP04']['out'] + self._folders['SLP04']['suffix']  # D01
-        profile_folder = join(self._output, 'BLP03_migrate_profile')
+        profile_folder = self._folders['BLP00']['out_migrate'] + self._folders['BLP00']['suffix']
         object_folder = self._folders['COMPILE_C']['out'] + self._folders['COMPILE_C']['suffix']  # BC08
         xtranslator_folder = self._folders['BLP02']['out'] + self._folders['BLP02']['suffix']  # BC03
         linker_folder = self._folders['BLP03']['out'] + self._folders['BLP03']['suffix']  # BC04
@@ -4510,7 +4510,7 @@ class Actc(AbstractDodo):                                                       
             dst.append(join(self._output, output_folder, 'mobile_blocks'))
 
         # runtime profiles
-        profiles = join(self._output, profile_folder, 'profiles', 'profiling_data.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
+        profiles = join(self._output, profile_folder, 'profiling_data.' + cbin + '.self_profiling.plaintext')
         if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(profiles))):
             profiles = None
         else:
