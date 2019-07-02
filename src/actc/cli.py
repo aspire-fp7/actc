@@ -143,108 +143,108 @@ ACTC v %s
 
         args = parser.parse_args()
 
-        try:
-            if args.generate is not None:
-                Config().generate(args.generate)
-                parser.exit(message="Configuration file '%s' created\n" % (basename(args.generate),))
-                sys.exit(0)
-            # end if
+        #try:
+        if args.generate is not None:
+            Config().generate(args.generate)
+            parser.exit(message="Configuration file '%s' created\n" % (basename(args.generate),))
+            sys.exit(0)
+        # end if
 
-            if args.update is not None:
-                Config().update(args.update)
-                parser.exit(message="Configuration file '%s' updated\n" % (basename(args.update),))
-                sys.exit(0)
-            # end if
+        if args.update is not None:
+            Config().update(args.update)
+            parser.exit(message="Configuration file '%s' updated\n" % (basename(args.update),))
+            sys.exit(0)
+        # end if
 
-            super(Main, self).__init__(args.file[0] if isinstance(args.file, list) else args.file,
-                                       debug=args.debug, verbose=args.verbose)
+        super(Main, self).__init__(args.file[0] if isinstance(args.file, list) else args.file,
+                                    debug=args.debug, verbose=args.verbose)
 
-            if args.aid:
-                print('%s' % self._aid);
-                sys.exit(0)
-            # end if
+        if args.aid:
+            print('%s' % self._aid);
+            sys.exit(0)
+        # end if
 
-            if args.cmd == 'build':
+        if args.cmd == 'build':
 
-                # Config version?
-                if APP_VERSION != self._config._version:
-                    print('=== Warning: Incompatible configuration file version: %s ===' % (self._config._version))
-                    print('Update to version %s using \'%s -u %s\'' % (APP_VERSION,
-                                                                       dirname(realpath(__file__)) + '.py',
-                                                                       self._config._path))
-                    cont = raw_input("Continue? (y/N): ")
-                    if(cont != 'y'):
-                        sys.exit(1)
-
-                # Config server ip check
-                if(not (self._config.SERVER.ip_address or self._config.SERVER.excluded)):
-                    print('=== Config error: SERVER.ip_address  empty ===')
+            # Config version?
+            if APP_VERSION != self._config._version:
+                print('=== Warning: Incompatible configuration file version: %s ===' % (self._config._version))
+                print('Update to version %s using \'%s -u %s\'' % (APP_VERSION,
+                                                                    dirname(realpath(__file__)) + '.py',
+                                                                    self._config._path))
+                cont = raw_input("Continue? (y/N): ")
+                if(cont != 'y'):
                     sys.exit(1)
 
-                # Config bytecode diversity seed check
-                if((not self._config.bin2bin.excluded) and
-                    not (str.isdigit(str(self._config.bin2bin.bytecode_diversity_seed))
-                        or self._config.bin2bin.bytecode_diversity_seed in 'RANDOM')
-                  ):
-                    print('=== Config error: bin2bin.bytecode_diversity_seed  empty, should be an int or \'RANDOM\' ===')
-                    sys.exit(1)
+            # Config server ip check
+            if(not (self._config.SERVER.ip_address or self._config.SERVER.excluded)):
+                print('=== Config error: SERVER.ip_address  empty ===')
+                sys.exit(1)
 
-                # Generate random seed
-                if(self._config.bin2bin.bytecode_diversity_seed in 'RANDOM'):
-                    new_seed = randint(-2 ** 31, 2 ** 31 - 1)
-                    self._config._update(self._config, {'bin2bin' : {'bytecode_diversity_seed' : str(new_seed)}})
-                    print '=========================================================================='
-                    print '= WARNING, random bytecode diversity seed used                           ='
-                    print '= Generated new bytecode diversity seed: %25d       =' % new_seed
-                    print '=========================================================================='
-                # end if
+            # Config bytecode diversity seed check
+            if((not self._config.bin2bin.excluded) and
+                not (str.isdigit(str(self._config.bin2bin.bytecode_diversity_seed))
+                    or self._config.bin2bin.bytecode_diversity_seed in 'RANDOM')
+                ):
+                print('=== Config error: bin2bin.bytecode_diversity_seed  empty, should be an int or \'RANDOM\' ===')
+                sys.exit(1)
 
-                with open(join(self._output, 'bytecode_diversity_seed.txt'), 'w') as fo:
-                    fo.write(self._config.bin2bin.bytecode_diversity_seed)
-                # end with
-
-                # Config code_mobility diversity seed check
-                if((not self._config.bin2bin.excluded) and
-                    not (str.isdigit(str(self._config.bin2bin.code_mobility_diversity_seed))
-                        or self._config.bin2bin.code_mobility_diversity_seed in 'RANDOM')
-                  ):
-                    print('=== Config error: bin2bin.code_mobility_diversity_seed  empty, should be an int or \'RANDOM\' ===')
-                    sys.exit(1)
-
-                # Generate random seed
-                if(self._config.bin2bin.code_mobility_diversity_seed in 'RANDOM'):
-                    new_seed = randint(-2 ** 31, 2 ** 31 - 1)
-                    self._config._update(self._config, {'bin2bin' : {'code_mobility_diversity_seed' : str(new_seed)}})
-                    print '=========================================================================='
-                    print '= WARNING, random code mobility diversity seed used                           ='
-                    print '= Generated new code mobility diversity seed: %25d       =' % new_seed
-                    print '=========================================================================='
-                # end if
-
-                with open(join(self._output, 'code_mobility_diversity_seed.txt'), 'w') as fo:
-                    fo.write(self._config.bin2bin.code_mobility_diversity_seed)
-                # end with
-
-                self.build(jobs=args.jobs)
-
-                if (args.process):
-                    try:
-                        self.processDot()
-                    except OSError:
-                        parser.exit(message='actc.py: failed: generate process graph (missing "dot" tool?)\n',
-                                    status=1)
-                    # end try
-                # end if
-
-            elif args.cmd == 'clean':
-                self.clean()
-
-            else:
-                parser.error('Unknown command: %s' % (args.cmd,))
+            # Generate random seed
+            if(self._config.bin2bin.bytecode_diversity_seed in 'RANDOM'):
+                new_seed = randint(-2 ** 31, 2 ** 31 - 1)
+                self._config._update(self._config, {'bin2bin' : {'bytecode_diversity_seed' : str(new_seed)}})
+                print '=========================================================================='
+                print '= WARNING, random bytecode diversity seed used                           ='
+                print '= Generated new bytecode diversity seed: %25d       =' % new_seed
+                print '=========================================================================='
             # end if
 
-        except Exception as err:  # pylint:disable=W0703
-            parser.error(err.message)
+            with open(join(self._output, 'bytecode_diversity_seed.txt'), 'w') as fo:
+                fo.write(self._config.bin2bin.bytecode_diversity_seed)
+            # end with
+
+            # Config code_mobility diversity seed check
+            if((not self._config.bin2bin.excluded) and
+                not (str.isdigit(str(self._config.bin2bin.code_mobility_diversity_seed))
+                    or self._config.bin2bin.code_mobility_diversity_seed in 'RANDOM')
+                ):
+                print('=== Config error: bin2bin.code_mobility_diversity_seed  empty, should be an int or \'RANDOM\' ===')
+                sys.exit(1)
+
+            # Generate random seed
+            if(self._config.bin2bin.code_mobility_diversity_seed in 'RANDOM'):
+                new_seed = randint(-2 ** 31, 2 ** 31 - 1)
+                self._config._update(self._config, {'bin2bin' : {'code_mobility_diversity_seed' : str(new_seed)}})
+                print '=========================================================================='
+                print '= WARNING, random code mobility diversity seed used                           ='
+                print '= Generated new code mobility diversity seed: %25d       =' % new_seed
+                print '=========================================================================='
+            # end if
+
+            with open(join(self._output, 'code_mobility_diversity_seed.txt'), 'w') as fo:
+                fo.write(self._config.bin2bin.code_mobility_diversity_seed)
+            # end with
+
+            self.build(jobs=args.jobs)
+
+            if (args.process):
+                try:
+                    self.processDot()
+                except OSError:
+                    parser.exit(message='actc.py: failed: generate process graph (missing "dot" tool?)\n',
+                                status=1)
+                # end try
+            # end if
+
+        elif args.cmd == 'clean':
+            self.clean()
+
+        else:
+            parser.error('Unknown command: %s' % (args.cmd,))
+        # end if
+
+        #except Exception as err:  # pylint:disable=W0703
+        #    parser.error(err.message)
         # end try
 
     # end def __init__

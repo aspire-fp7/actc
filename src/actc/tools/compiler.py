@@ -58,6 +58,7 @@ from actc.tools                 import toList
 # ------------------------------------------------------------------------------
 
 FRONTEND = 'gcc'
+FRONTEND_FORTRAN = 'gfortran'
 
 class Preprocessor(AbstractCmdTool):
     '''
@@ -85,7 +86,6 @@ class Preprocessor(AbstractCmdTool):
 
         # options
         args.extend(self._options)
-        args.append('-std=c99')
         args.append('-E')
         args.append('-P')
 
@@ -154,13 +154,15 @@ class Compiler(AbstractCmdTool):
 
     def __init__(self, program = FRONTEND,
                        options = None,
-                       outputs = ('build/obj', '.o')):
+                       outputs = ('build/obj', '.o'),
+                       exit_if_pgm_not_exist = True):
         '''
         @copydoc actc.tools.AbstractBasicCmdTool.__init__
         '''
         super(Compiler, self).__init__(program = program,
                                        options = options,
-                                       outputs = outputs)
+                                       outputs = outputs,
+                                       exit_if_pgm_not_exist=exit_if_pgm_not_exist)
     # end def __init__
 
     _ACTION = 'compile'
@@ -352,7 +354,13 @@ class Linker(AbstractCmdTool):
         # Hack to link only .o files
         # Hack to preserve objects order
         #args.extend(list(task.file_dep))
-        args.extend([obj for obj in objs if not obj.endswith('.json')])
+        archive_group = ''
+        for i in self._options:
+            if 'start-group' in i:
+                archive_group = i
+                break
+
+        args.extend([obj for obj in objs if not obj.endswith('.json') and (obj not in archive_group)])
 
         # options
         args.extend(self._options)

@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------------------
 # Copyright (c) 2014-2016 Nagravision S.A., Gemalto S.A., Ghent University
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -53,7 +53,9 @@ from os.path                    import islink
 from os.path                    import getsize
 from os.path                    import join
 from os.path                    import sep
+from os.path                    import splitext
 from subprocess                 import call
+from subprocess                 import check_output
 from time                       import strftime
 from uuid                       import getnode
 from collections                import OrderedDict
@@ -86,6 +88,7 @@ from actc.tools.diablo          import RenewableMobileBlocksGenerator
 from actc.tools.diablo          import DIABLO_SP_OBJ_LINUX
 from actc.tools.diablo          import DIABLO_SP_OBJ_ANDROID
 from actc.tools.diablo          import ProfileTranslator
+from actc.tools.diablo          import ProfileExtender
 
 from actc.tools.compiler        import Compiler
 from actc.tools.compiler        import CompilerSO
@@ -105,6 +108,8 @@ from actc.tools.splitter        import SplitterProcess
 from actc.tools.splitter        import SplitterCodeTransformation
 
 from actc.tools.utils           import Copier
+from actc.tools.utils           import ExtendedCopier
+#from actc.tools.utils           import IncludePathRewriter
 
 from actc.tools.wbc             import WbcAnnotationReader
 from actc.tools.wbc             import WbcHeaderIncluder
@@ -120,6 +125,20 @@ from actc.tools.xtranslator     import Xtranslator
 
 from actc.tools.renewability    import RenewabilityCreate
 from actc.tools.renewability    import RenewabilityPolicy
+
+GENERATOR="/projects/scripts/generate-annotation-file.sh"
+
+def CompilerLibraryPath(compiler, library, explicit_static):
+    result = ''
+
+    if not explicit_static \
+        or library == 'dl':
+        result = '-l%s' % library
+    else:
+        cmd = list([compiler, "-print-file-name=lib%s.a" % library])
+        result = check_output(cmd).strip()
+
+    return result
 
 # ------------------------------------------------------------------------------
 # implementation
@@ -205,6 +224,9 @@ class Actc(AbstractDodo):                                                       
         self._skip_BLP04_DYN    = False
         self._skip_BLP04_DYN_01 = False
         self._skip_BLP04_DYN_02 = False
+        self._skip_COMPILE_SELFDEBUGGER = False
+        self._skip_COMPILE_SELFPROFILING = False
+        self._skip_COMPILE_CODEMOBILITY = False
 
         # metrics
         self._skip_M01      = False
@@ -276,18 +298,21 @@ class Actc(AbstractDodo):                                                       
         self._folders['SLP11'] = {'out': 'SC11', 'suffix' : ''}  # DCL
         self._folders['SLP12'] = {'out': 'SC12', 'out_be': 'SC12.01', 'suffix': ''}  # Control Flow Tagging, with BackEnd output
         self._folders['SPLIT_CPP'] = {'out': 'SC12', 'suffix' : ''}  # Changed order to make sure suffix is calculated correctly
+        self._folders['SPLIT_FORTRAN'] = {'out': 'SC12', 'suffix' : ''}  # Changed order to make sure suffix is calculated correctly
         self._folders['SLP04'] = {'out': 'D01', 'suffix' : ''}  # Annotation extraction
         self._folders['SLP07'] = {'out': 'BC07', 'suffix' : ''}  # Remote attestation
         self._folders['COMPILE_C'] = {'out': 'BC08', 'suffix' : ''}  # Compile C files
         self._folders['COMPILE_CPP'] = {'out': 'BC08', 'suffix' : ''}  # Compile CPP files, same as COMPILE_C
+        self._folders['PREPROCESS_CPP'] = {'out': 'SC13', 'suffix' : ''}  # Compile CPP files, same as COMPILE_C
+        self._folders['COMPILE_FORTRAN'] = {'out': 'BC08', 'suffix' : ''}  # Compile Fortran files
         self._folders['ACCL'] = {'out': 'BC08', 'suffix' : ''}  # Compile ACCL files
         self._folders['LINK'] = {'out': 'BC02', 'suffix' : ''}  # Linker
 
-        self._folders['BLP00'] = {'out_sp': 'BC02_SP', 'out_dyn': 'BC02_DYN', 'suffix' : ''}  # Self-profiling binaries on vanilla
+        self._folders['BLP00'] = {'out_sp': 'BC02_SP', 'out_dyn': 'BC02_DYN', 'out_migrate': 'profile_BC02_to_BC04', 'suffix' : ''}  # Self-profiling binaries on vanilla
         self._folders['BLP01'] = {'out': 'BLC02', 'suffix' : ''}  # Extractor
         self._folders['BLP02'] = {'out': 'BC03', 'suffix' : ''}
         self._folders['BLP03'] = {'out': 'BC04', 'suffix' : ''}
-        self._folders['BLP04'] = {'out': 'BC05', 'suffix' : ''}
+        self._folders['BLP04'] = {'out': 'BC05', 'out_integrate': 'BC05_integrate', 'out_extend': 'profile_BC04_extend_BC05i', 'suffix' : ''}
         self._folders['BLP04_DYN'] = {'out': 'BC05_DYN', 'suffix' : ''}
         self._folders['M01'] = {'out': 'M01', 'suffix' : ''}
 
@@ -295,6 +320,9 @@ class Actc(AbstractDodo):                                                       
         self._caching = True if self._config.src2src.SLP01.external_annotations and self._config.src2src.SLP01.annotations_patch else False
         if(self._caching):
             updateFolders(self._folders, self._config.src2src.SLP01.external_annotations, self._annotations_list)
+
+        self._using_fortran = False
+        self._archive_uid = 0
 
     # end def __init__
 
@@ -338,7 +366,25 @@ class Actc(AbstractDodo):                                                       
 
         # Get source code
         # ----------------------------------------------------------------------
-        src = self._config.src2src.SLP01.source
+        src = []
+        self._archives = []
+        self._archives_must_link = []
+        self._not_in_archive = []
+        for lst in self._config.src2src.SLP01.source:
+            if isinstance(lst, list):
+                archive_name = "archive_%d.a" % self._archive_uid
+                archive_contents = []
+                for filename in lst:
+                    archive_contents.append(basename(filename))
+                    src.append(filename)
+                self._archives.append((archive_name, archive_contents))
+                self._archive_uid += 1
+            else:
+                # object file that should not be put in an archive
+                # this can be needed for, e.g., object files that define symbols which need to be exported from a shared library
+                # using a version file (see the libdiamante use case in Aspire)
+                self._not_in_archive.append(basename(lst))
+                src.append(lst)
 
         # Copy ADSS generated patch file if present
         if(self._config.src2src.SLP01.annotations_patch):
@@ -350,7 +396,11 @@ class Actc(AbstractDodo):                                                       
 
         dst = join(self._output, output_folder)
 
-        tool = Copier(outputs = (dst, ''))
+        if (self._config.src2src.SLP01.extended_copy
+            and isfile(self._config.src2src.SLP01.extended_copy)):
+            tool = ExtendedCopier(outputs = (dst, ''))
+        else:
+            tool = Copier(outputs = (dst, ''))
         yield tool.tasks(src)
     # end def task_SLP01
 
@@ -400,7 +450,7 @@ class Actc(AbstractDodo):                                                       
         if (self._skip_SLP01):
             return
         # end if
-        
+
         # input and output folders
         input_folder = self._folders['SLP01']['out'] + self._folders['SLP01']['suffix']
         output_folder = self._folders['SPLIT_C']['out'] + self._folders['SPLIT_C']['suffix']
@@ -454,6 +504,41 @@ class Actc(AbstractDodo):                                                       
         self._updateDot('SPLIT_CPP', input_folder, output_folder)
     # end def task_SPLIT_CPP
 
+    # ==========================================================================
+    def task_SPLIT_FORTRAN(self):
+        '''
+        SC02 --> split source code (.f) --> SC012
+
+        @return (Task)
+        '''
+        # Check configuration
+        # ----------------------------------------------------------------------
+        if (self._skip_SLP01):
+            return
+        # end if
+
+        # input and output folders
+        input_folder = self._folders['SLP01']['out'] + self._folders['SLP01']['suffix']
+        output_folder = self._folders['SPLIT_FORTRAN']['out'] + self._folders['SPLIT_FORTRAN']['suffix']
+
+        # Split *.f
+        # ----------------------------------------------------------------------
+        src  = [join(self._output, input_folder, '*.f'),
+                join(self._output, input_folder, '*.f90')]
+        for x in src:
+            for _ in iglob(abspath(x)):
+                self._using_fortran = True
+                break
+
+        dst  =  join(self._output, output_folder)
+
+        tool = Copier(outputs = (dst, ''))
+
+        yield tool.tasks(src)
+
+        # ----------------------------------------------------------------------
+        self._updateDot('SPLIT_FORTRAN', input_folder, output_folder)
+    # end def task_SPLIT_FORTRAN
 
     # ==========================================================================
     def task_SLP03(self):
@@ -1222,9 +1307,15 @@ class Actc(AbstractDodo):                                                       
         src = join(self._output, input_folder, '*.c')
 
         dst = join(self._output, output_folder)
+        
+        # C standard
+        c_standard = "c99"
+        if self._config.src2bin.PREPROCESS.c_standard:
+            c_standard = self._config.src2bin.PREPROCESS.c_standard
 
         tool = Preprocessor(program = self._config.tools.frontend,
                             options = self._config.src2bin.options
+                                    + ['-std=%s' % (c_standard)]
                                     + self._config.src2bin.PREPROCESS.options
                                     + ['-D', 'ASPIRE_AID=%s' % (self._aid,)],
                             outputs = (dst, '.i'))
@@ -2146,7 +2237,7 @@ class Actc(AbstractDodo):                                                       
 
         # ----------------------------------------------------------------------
         self._updateDot('SLP09_01_AC', input_folder, output_folder)
-    # end def task_SLP09_01_AC   
+    # end def task_SLP09_01_AC
 
     # ==========================================================================
     def task_SLP09_02_PREPROCESS(self):
@@ -3241,6 +3332,203 @@ class Actc(AbstractDodo):                                                       
     # end def task_COMPILE_CPP
 
     # ==========================================================================
+    def task_PREPROCESS_CPP(self):
+        '''
+        SC12 --> compiler --> SC13
+
+        @return (Task)
+        '''
+        # Check configuration
+        # ----------------------------------------------------------------------
+        if (self._config.src2bin.excluded):
+            return
+        # end if
+
+        # input and output folders
+        input_folder = self._folders['SLP12']['out'] + self._folders['SLP04']['suffix']  # cached output of SLP09 with inserted annotations in SLP04
+        output_folder = self._folders['PREPROCESS_CPP']['out'] + self._folders['PREPROCESS_CPP']['suffix']
+
+        # SC12/*.cpp --> SC13/*.i
+        # ----------------------------------------------------------------------
+        src = join(self._output, input_folder, '*.cpp')
+
+        dst = join(self._output, output_folder)
+
+        tool = Compiler(program = self._config.tools.frontend,
+                        options = self._config.src2bin.options
+                                + self._config.src2bin.PREPROCESS.options
+                                + ['-D', 'ASPIRE_AID=%s' % (self._aid,)]
+                                + self._config.src2bin.COMPILE.options
+                                + self._config.src2bin.COMPILE.options_cpp
+                                + ['-g',
+                                   '-mfloat-abi=softfp',
+                                   '-msoft-float',
+                                   '-mfpu=neon',
+                                   '-E'],
+                        outputs = (dst, '.i'))
+
+        yield tool.tasks(src,
+                         header_files=[join(self._output, input_folder, '*.h'),
+                                        join(self._output, input_folder, '*.hpp')])
+
+        # ----------------------------------------------------------------------
+        self._updateDot('PREPROCESS_CPP', input_folder, output_folder)
+    # end def task_PREPROCESS_CPP
+
+    # ==========================================================================
+    def task_COMPILE_FORTRAN(self):
+        '''
+        SC12 --> compiler --> BC08
+
+        @return (Task)
+        '''
+        # Check configuration
+        # ----------------------------------------------------------------------
+        if (self._config.src2bin.excluded):
+            return
+        # end if
+
+        # input and output folders
+        input_folder = self._folders['SLP12']['out'] + self._folders['SLP04']['suffix']  # cached output of SLP09 with inserted annotations in SLP04
+        output_folder = self._folders['COMPILE_FORTRAN']['out'] + self._folders['COMPILE_FORTRAN']['suffix']
+
+        # SC12/*.cpp --> BC08/*.o
+        # ----------------------------------------------------------------------
+        src = [join(self._output, input_folder, '*.f'),
+                join(self._output, input_folder, '*.f90')]
+
+        dst = join(self._output, output_folder)
+
+        tool = Compiler(program = self._config.tools.frontend_fortran,
+                        options = self._config.src2bin.options
+                                + self._config.src2bin.PREPROCESS.options
+                                + ['-D', 'ASPIRE_AID=%s' % (self._aid,)]
+                                + self._config.src2bin.COMPILE.options
+                                + ['-g',
+                                   '-mfloat-abi=softfp',
+                                   '-msoft-float',
+                                   '-mfpu=neon'],
+                        outputs = (dst, '.o'),
+                        exit_if_pgm_not_exist=False)
+
+        yield tool.tasks(src, header_files=[])
+
+        # ----------------------------------------------------------------------
+        self._updateDot('COMPILE_FORTRAN', input_folder, output_folder)
+    # end def task_COMPILE_ FORTRAN
+
+    def task_COMPILE_SELFDEBUGGER(self):
+        if self._config.src2bin.excluded:
+            self._skip_COMPILE_SELFDEBUGGER = True
+            return
+        # end if
+
+        if not self._binary_annotations['anti_debugging']:
+            self._skip_COMPILE_SELFDEBUGGER = True
+            return
+        # end if
+
+        output_folder = self._folders['COMPILE_C']['out'] + self._folders['COMPILE_C']['suffix']
+        dst = join(self._output, output_folder)
+
+        if isfile(self._config.tools.anti_debugging_source):
+            # compile source
+            src  = self._config.tools.anti_debugging_source
+
+            debug_options = ''
+            if self._config.debug_support_code:
+                debug_options = '-DENABLE_LOGGING'
+
+            tool = Compiler(program = self._config.tools.frontend,
+                            options = [debug_options,
+                                       '-O3',
+                                       '-fPIC',
+                                       '-marm',
+                                       '-mfloat-abi=softfp',
+                                       '-msoft-float',
+                                       '-mfpu=neon',
+                                       '-std=gnu99',
+                                       '-Wall',
+                                       '-Wextra',
+                                       '-Wno-unused'],
+                            outputs = (dst, '.o'))
+
+            yield tool.tasks(src)
+
+            self._updateDot('COMPILE_SELFDEBUGGER', self._config.tools.anti_debugging_source, output_folder)
+        else:
+            self._skip_COMPILE_SELFDEBUGGER = True
+        # end if
+    # end def task_COMPILE_SELFDEBUGGER
+
+    def task_COMPILE_SELFPROFILING(self):
+        if self._config.src2bin.excluded:
+            self._skip_COMPILE_SELFPROFILING = True
+            return
+        # end if
+
+        if isfile(self._config.tools.sp_source):
+            output_folder = self._folders['COMPILE_C']['out'] + self._folders['COMPILE_C']['suffix']
+
+            src = self._config.tools.sp_source
+            dst = join(self._output, output_folder)
+
+            debug_options = ''
+            if self._config.debug_support_code:
+                debug_options = '-DENABLE_LOGGING'
+
+            tool = Compiler(program = self._config.tools.frontend,
+                            options = [debug_options,
+                                       '-marm',
+                                       '-fPIC'],
+                            outputs = (dst, '.o'))
+
+            yield tool.tasks(src)
+
+            self._updateDot('COMPILE_SELFPROFILING', self._config.tools.sp_source, output_folder)
+        else:
+            self._skip_COMPILE_SELFPROFILING = True
+        # end if
+    # end def task_COMPILE_SELFPROFILING
+
+    def task_COMPILE_CODEMOBILITY(self):
+        if self._config.src2bin.excluded:
+            self._skip_COMPILE_CODEMOBILITY = True
+            return
+        # end if
+
+        if isdir(self._config.tools.code_mobility_source):
+            output_folder = self._folders['COMPILE_C']['out'] + self._folders['COMPILE_C']['suffix']
+
+            src = [join(self._config.tools.code_mobility_source, 'binder', 'binder.c'),
+                    join(self._config.tools.code_mobility_source, 'downloader', 'downloader.c')]
+            dst = join(self._output, output_folder)
+
+            debug_options = ''
+            if self._config.debug_support_code:
+                debug_options = '-DENABLE_LOGGING'
+
+            tool = Compiler(program = self._config.tools.frontend,
+                            options = [debug_options,
+                                       '-O3',
+                                       '-fPIC',
+                                       '-marm',
+                                       '-mfloat-abi=softfp',
+                                       '-msoft-float',
+                                       '-mfpu=neon',
+                                       '-std=gnu99',
+                                       '-Wall'],
+                            outputs = (dst, '.o'))
+
+            yield tool.tasks(src)
+
+            self._updateDot('COMPILE_CODEMOBILITY', self._config.tools.code_mobility_source, output_folder)
+        else:
+            self._skip_COMPILE_CODEMOBILITY = True
+        # end if
+    # end def task_COMPILE_CODEMOBILITY
+
+    # ==========================================================================
     def task_COMPILE_ACCL(self):
         '''
         self._config.tools.accl --> compile ACCL libs --> BC08/accl
@@ -3311,6 +3599,115 @@ class Actc(AbstractDodo):                                                       
         self._updateDot('COMPILE_ACCL', join(self._config.tools.accl, 'src'), output_folder)
     # end def task_COMPILE_ACCL
 
+    def task_ARCHIVE(self):
+        # Check configuration
+        # ----------------------------------------------------------------------
+        if (self._config.src2bin.excluded):
+            return
+        # end if
+
+        # add special archives if needed
+        if not self._skip_SLP08:
+            # code guards
+            input_folder = self._folders['SLP08']['out'] + self._folders['SLP08']['suffix']
+
+            src = join(self._output, input_folder)
+
+            archive_name = 'archive_%d.a' % self._archive_uid
+            self._archive_uid += 1
+
+            archive_contents = []
+            cg_patterns = ['attestator_*.i', 'mechanisms_*.i', 'utils.c.i']
+            for cg_pattern in cg_patterns:
+                for x in iglob(join(src, cg_pattern)):
+                    archive_contents.append(basename(x))
+
+            self._archives.append((archive_name, archive_contents))
+        #endif
+
+        if self._binary_annotations['anti_debugging']:
+            # allocate new archive
+            archive_name = 'archive_%d.a' % self._archive_uid
+            self._archive_uid += 1
+
+            archive_contents = []
+            if self._skip_COMPILE_SELFDEBUGGER:
+                # use existing object
+                archive_contents.append(join(self._config.tools.anti_debugging, 'obj', self._config.platform, ''))
+            else:
+                archive_contents.append('debugger.c')
+            #endif
+
+            self._archives_must_link.append((archive_name, archive_contents))
+        #endif
+
+        if self._binary_annotations['code_mobility']:
+            # allocate new archive
+            archive_name = 'archive_%d.a' % self._archive_uid
+            self._archive_uid += 1
+
+            archive_contents = []
+
+            binder_obj = join(self._config.tools.code_mobility, 'binder', 'obj', self._config.platform, 'binder.c')
+            downloader_obj = join(self._config.tools.code_mobility, 'downloader', 'obj', self._config.platform, 'downloader.c')
+            renewability_obj = join(self._config.tools.renewability, 'obj', self._config.platform)
+
+            # override paths if we compiled the objects ourselves
+            if not self._skip_COMPILE_CODEMOBILITY:
+                binder_obj = 'binder.c'
+                downloader_obj = 'downloader.c'
+            # end if
+
+            archive_contents.append(binder_obj)
+            archive_contents.append(downloader_obj)
+
+            # link in renewability object if requested
+            if self._binary_annotations['renewability']:
+                archive_contents.append(join(renewability_obj, 'renewability.o'))
+
+            self._archives_must_link.append((archive_name, archive_contents))
+        #endif
+
+        # input and output folders
+        input_folder = self._folders['COMPILE_C']['out'] + self._folders['COMPILE_C']['suffix']
+        output_folder = input_folder
+
+        src = join(self._output, input_folder)
+        dst = join(self._output, output_folder)
+
+        # HACK select proper archiving tool
+        frontend = self._config.tools.frontend
+        if frontend.endswith('gcc'):
+            frontend = frontend[:-3] + 'ar'
+
+        elif frontend.endswith('clang'):
+            frontend = join(dirname(frontend), 'llvm-ar')
+        # end if
+
+        for (archive_name, archive_contents) in self._archives+self._archives_must_link:
+            dstdir = join(dst, archive_name)
+
+            # create tool
+            tool = Archiver(program=frontend,
+                            options=[],
+                            outputs=(dstdir, ''))
+
+            # construct list of input files
+            srcfiles = []
+            for filename in archive_contents:
+                if filename[0] == '/':
+                    for x in iglob(filename + '*.o'):
+                        srcfiles.append(x)
+                else:
+                    for x in iglob(join(src, filename + '*.o')):
+                        srcfiles.append(x)
+
+            # execute tool
+            yield tool.tasks(srcfiles, join(dstdir, archive_name))
+
+            # ----------------------------------------------------------------------
+            self._updateDot('ARCHIVE', input_folder, output_folder)
+
     # ==========================================================================
     def task_LINK(self):
         '''
@@ -3331,7 +3728,8 @@ class Actc(AbstractDodo):                                                       
 
         # BC08/*.o --> BC02/<binary>
         # ----------------------------------------------------------------------
-        src = [join(self._output, input_folder, '*.o'), ]
+        #src = [join(self._output, input_folder, '*.o'), ]
+        src = []
 
         dst = join(self._output, output_folder)
 
@@ -3357,6 +3755,22 @@ class Actc(AbstractDodo):                                                       
             dot.extend([self.curl_lib, self.openssl_lib])
         # end if
 
+        obj = 'none'
+        if self._skip_COMPILE_SELFPROFILING:
+            if (self._config.platform == 'linux'):
+                obj = DIABLO_SP_OBJ_LINUX
+
+            elif (self._config.platform == 'android'):
+                obj = DIABLO_SP_OBJ_ANDROID
+
+            else:
+                assert False, 'Unknown platform: %s\n' % self._config.platform
+        else:
+            obj = join(self._output, input_folder, 'print.c.o')
+        # end if
+        src.append(obj)
+        dot.append(obj)
+
 #         if (self._binary_annotations['dcl']):
 #             print('----------------------APPENDING DCL!!!')
 #             src.append(join(self._folders['SLP11']['out'] + self._folders['SLP11']['suffix'], 'dist/libs/armeabi-v7a'))
@@ -3365,14 +3779,41 @@ class Actc(AbstractDodo):                                                       
 
         options = list()
         if (self._config.platform == 'linux'):
-            options.append('-lpthread')  # required for reaction units
+            options.append(CompilerLibraryPath(self._config.tools.frontend, 'pthread', self._config.explicit_static))
         #  end if
+
+        # look for fortran presence
+        if self._using_fortran:
+            options.append(CompilerLibraryPath(self._config.tools.frontend, 'gfortran', self._config.explicit_static))
+            options.append(CompilerLibraryPath(self._config.tools.frontend, 'm', self._config.explicit_static))
+
+        src_libraries = []
+        for (archive_name, _) in self._archives:
+            x = join(self._output, input_folder, archive_name, archive_name)
+            src_libraries.append(x)
+
+        for filename in self._not_in_archive:
+            for x in iglob(join(self._output, input_folder, filename + '*.o')):
+                src.append(x)
+
+        option_libs = ""
+        if src_libraries:
+            str_libraries = ""
+            for lib in src_libraries:
+                str_libraries += " %s" % lib
+                src.append(lib)
+            option_libs = '-Wl,--start-group %s -Wl,--end-group' % str_libraries
+            #options.append(option_libs)
+
+        for (archive_name, _) in self._archives_must_link:
+            src.append(join(self._output, input_folder, archive_name, archive_name))
 
         tool = Linker(program = self._config.tools.frontend,
                       options = self._config.src2bin.options
+                              + [option_libs]
                               + self._config.src2bin.LINK.options
                               + ['-g',
-                                 '-ldl',
+                                 CompilerLibraryPath(self._config.tools.frontend, 'dl', self._config.explicit_static),
                                  '-mfloat-abi=softfp',
                                  '-msoft-float',
                                  '-mfpu=neon',
@@ -3478,20 +3919,10 @@ class Actc(AbstractDodo):                                                       
 
         dst = join(self._output, output_folder)
 
-
-        obj = 'none'
-        if (self._config.platform == 'linux'):
-            obj = DIABLO_SP_OBJ_LINUX
-
-        elif (self._config.platform == 'android'):
-            obj = DIABLO_SP_OBJ_ANDROID
-
-        else:
-            assert False, 'Unknown platform: %s\n' % self._config.platform
-
         tool = DiabloObfuscator(program = self._config.tools.obfuscator_sp,
                                 options = self._config.bin2bin.BLP00._01.options
-                                + ['-SP', obj],
+                                + ['-SP', 'none']
+                                + ['-S'],
                                 aid=self._aid,
                                 outputs = (dst, ''),
                                 self_profiling = True)
@@ -3524,13 +3955,7 @@ class Actc(AbstractDodo):                                                       
         output_folder = input_folder  # BC02_SP
 
         # ----------------------------------------------------------------------
-
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-        else:
-            cbin = self._config.src2bin.LINK.binary
-        # end if
+        cbin, _ = self._outfilenames()
 
         src = join(self._output, input_folder)
 
@@ -3580,19 +4005,11 @@ class Actc(AbstractDodo):                                                       
         output_folder = self._folders['BLP00']['out_dyn'] + self._folders['BLP00']['suffix']  # BC02_DYN
 
         # ----------------------------------------------------------------------
-
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.')
-        else:
-            cbin = self._config.src2bin.LINK.binary
-            dbin = self._config.src2bin.LINK.binary
-        #end if
+        cbin, dbin = self._outfilenames()
 
         src = [join(self._output, annotations_folder, 'annotations.json'),
                 join(self._output, linker_folder, cbin),
-                join(self._output, sp_folder, 'profiles', 'profiling_data.' + cbin + '.self_profiling.plaintext')]
+                join(self._output, sp_folder, 'profiles', 'profiling_data.' + cbin + '.self_profiling')]
 
         dst = join(self._output, output_folder)
 
@@ -3677,7 +4094,14 @@ class Actc(AbstractDodo):                                                       
 
         #
         # ----------------------------------------------------------------------
-        src = join(self._output, annotations_folder, 'annotations.json')
+        src = [join(self._output, annotations_folder, 'annotations.json')]
+
+        profile_folder = self._folders['BLP00']['out_sp'] + self._folders['BLP00']['suffix']  # BC02_SP
+        profiles = join(self._output, profile_folder, 'profiles', 'profiling_data.' + self._config.src2bin.LINK.binary + '.self_profiling')
+        if not isfile(profiles):
+            profiles = None
+        else:
+            src.append(profiles)
 
         dst = join(self._output, output_folder)
 
@@ -3690,7 +4114,8 @@ class Actc(AbstractDodo):                                                       
         yield tool.tasks(src,
                          objdir=join(self._output, object_folder),
                          bindir=join(self._output, linker_folder),
-                         binary=join(self._output, linker_folder, self._config.src2bin.LINK.binary))
+                         binary=join(self._output, linker_folder, self._config.src2bin.LINK.binary),
+                         runtime_profiles=profiles)
 
         # ----------------------------------------------------------------------
         self._updateDot('BLP01_EXTRACT', [linker_folder, object_folder, annotations_folder], output_folder)
@@ -3737,7 +4162,7 @@ class Actc(AbstractDodo):                                                       
 
         tool = Xtranslator(program = self._config.tools.xtranslator,
                            options = self._config.bin2bin.BLP02.options +
-                           ['--gen-VM',
+                           ['--gen-VM', '--no-opt',
                             '--gen-VM-out-dir', join(dst, 'out_gen_vm')],
                            outputs = (dst, '.s'))
 
@@ -3849,7 +4274,7 @@ class Actc(AbstractDodo):                                                       
 
         # BC03/*_chunks.json.s --> BC03/*_chunks.json.s.o
         # ----------------------------------------------------------------------
-        src = join(self._output, input_folder, 'out_gen_vm', 'out', '*.o')
+        src = [join(self._output, input_folder, 'out_gen_vm', 'out', 'genvm.o'), join(self._output, input_folder, 'out_gen_vm', 'out', 'vmExecute.o')]
 
         dst = join(self._output, output_folder, 'out_gen_vm', 'out')
 
@@ -3921,9 +4346,6 @@ class Actc(AbstractDodo):                                                       
         binder_obj      = join(self._config.tools.code_mobility,
                                'binder', 'obj', self._config.platform)
 
-        debugger_obj    = join(self._config.tools.anti_debugging,
-                               'obj', self._config.platform)
-
         downloader_obj  = join(self._config.tools.code_mobility,
                                'downloader', 'obj', self._config.platform)
         renewability_obj = join(self._config.tools.renewability,
@@ -3932,8 +4354,7 @@ class Actc(AbstractDodo):                                                       
         xtranslator_obj = join(self._output, xtranslator_folder, 'out_gen_vm', 'out')
 
         src = [json,
-               join(self._output, xtranslator_folder, '*.o'),
-               join(self._output, object_folder, '*.o')]
+               join(self._output, xtranslator_folder, '*.o')]
 
         frontend = self._config.tools.frontend
 
@@ -3945,6 +4366,9 @@ class Actc(AbstractDodo):                                                       
             options.append('-fuse-ld=bfd')
         # end if
 
+        if self._using_fortran:
+            options.append(CompilerLibraryPath(self._config.tools.frontend, 'gfortran', self._config.explicit_static))
+
         dot = [xtranslator_folder, object_folder]
 
         if (self._binary_annotations['remote_attestation']):
@@ -3953,38 +4377,19 @@ class Actc(AbstractDodo):                                                       
             dot.append(remote_lib)
         # end if
 
-        if (self._binary_annotations['code_mobility']):
-            src.extend([join(binder_obj, 'binder.o'), join(downloader_obj, 'downloader.o')])
-            dot.extend([binder_obj, downloader_obj])
-
-            # link in renewability object if requested
-            if self._binary_annotations['renewability']:
-                src.append(join(renewability_obj, 'renewability.o'))
-                dot.append(renewability_obj)
-        # end if
-
-        if (self._binary_annotations['anti_debugging']):
-            src.append(join(debugger_obj, '*.o'))
-
-            dot.append(debugger_obj)
-        # end if
-
-        if (self._binary_annotations['softvm']):
-            src.append(join(xtranslator_obj, 'vmExecute.o'))
-
-            dot.append(xtranslator_obj)
-        # end if
-
         if(self._config.bin2bin.BLP04['self-profiling']):
-            obj = 'none'
-            if (self._config.platform == 'linux'):
-                obj = DIABLO_SP_OBJ_LINUX
+            if self._skip_COMPILE_SELFPROFILING:
+                obj = 'none'
+                if (self._config.platform == 'linux'):
+                    obj = DIABLO_SP_OBJ_LINUX
 
-            elif (self._config.platform == 'android'):
-                obj = DIABLO_SP_OBJ_ANDROID
+                elif (self._config.platform == 'android'):
+                    obj = DIABLO_SP_OBJ_ANDROID
 
+                else:
+                    assert False, 'Unknown platform: %s\n' % self._config.platform
             else:
-                assert False, 'Unknown platform: %s\n' % self._config.platform
+                obj = join(self._output, object_folder, 'print.c.o')
             # end if
             src.append(obj)
             dot.append(obj)
@@ -4000,11 +4405,11 @@ class Actc(AbstractDodo):                                                       
             or self._binary_annotations['anti_cloning']
             or self._binary_annotations['timebombs']
             or self._binary_annotations['dcl']):
-                
+
             src.extend([join(self.curl_lib, 'libcurl.a'),
                     join(self.openssl_lib, 'libssl.a'),
                     join(self.openssl_lib, 'libcrypto.a')])
-                    
+
             dot.extend([self.curl_lib, self.openssl_lib])
         # end if
 
@@ -4054,6 +4459,27 @@ class Actc(AbstractDodo):                                                       
             dot.extend([self.curl_lib, self.openssl_lib])
         # end if
 
+        src_libraries = []
+        for (archive_name, _) in self._archives:
+            src_libraries.append(join(self._output, object_folder, archive_name, archive_name))
+
+        for filename in self._not_in_archive:
+            for x in iglob(join(self._output, object_folder, filename + '*.o')):
+                src.append(x)
+
+        option_libs = ""
+        if src_libraries:
+            str_libraries = ""
+            for lib in src_libraries:
+                #str_libraries += " -l%s" % splitext(lib)[0]
+                str_libraries += " %s" % lib
+                src.append(lib)
+            option_libs = '-Wl,--start-group %s -Wl,--end-group' % str_libraries
+            #options.append(option_libs)
+
+        for (archive_name, _) in self._archives_must_link:
+            options.append('-Wl,--whole-archive %s -Wl,--no-whole-archive' % join(self._output, object_folder, archive_name, archive_name))
+            src.append(join(self._output, object_folder, archive_name, archive_name))
 
         if (self._binary_annotations['softvm']):
             src.append(join(xtranslator_obj, 'vm.a'))
@@ -4074,22 +4500,18 @@ class Actc(AbstractDodo):                                                       
 
         dst = join(self._output, output_folder)
 
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            binary = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-        else:
-            binary = self._config.src2bin.LINK.binary
-        #end if
+        binary, _ = self._outfilenames()
 
         binary = join(dst, binary)
 
         tool = Linker(program = frontend,
                       options = self._config.src2bin.options
+                              + [option_libs]
                               + self._config.src2bin.LINK.options
                               + options
                               + ['-g',
-                                 '-ldl',
-                                 '-lm',
+                                 CompilerLibraryPath(compiler=frontend, library='dl', explicit_static=self._config.explicit_static),
+                                 CompilerLibraryPath(compiler=frontend, library='m', explicit_static=self._config.explicit_static),
                                  '-mfloat-abi=softfp',
                                  '-msoft-float',
                                  '-mfpu=neon',
@@ -4107,23 +4529,16 @@ class Actc(AbstractDodo):                                                       
         # runtime profiles
         profile_folder = self._folders['BLP00']['out_sp'] + self._folders['BLP00']['suffix']  # BC02_SP
 
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.')
-        else:
-            cbin = self._config.src2bin.LINK.binary
-            dbin = self._config.src2bin.LINK.binary
-        #end if
+        cbin, _ = self._outfilenames()
 
-        src_profile = join(self._output, profile_folder, 'profiles', 'profiling_data.' + cbin + '.self_profiling.plaintext')
+        src_profile = join(self._output, profile_folder, 'profiles', 'profiling_data.' + cbin + '.self_profiling')
 
         if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(src_profile))):
             return
 
         # translate the BC02 profile so it is compatible with BC04 (the instruction addresses have changed)
-        dst = join(self._output, 'BLP03_migrate_profile', 'profiles')
-        dst_profile = join(dst, 'profiling_data.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
+        dst = join(self._output, self._folders['BLP00']['out_migrate'] + self._folders['BLP00']['suffix'])
+        dst_profile = join(dst, 'profiling_data.' + cbin + '.self_profiling')
 
         tool = ProfileTranslator(options =    ['-p', src_profile]
                                             + ['-q', dst_profile]
@@ -4133,6 +4548,56 @@ class Actc(AbstractDodo):                                                       
         yield tool.tasks(src_profile, dst_profile)
     # end def task_BLP03_migrate_profile
 
+    def task_generator(self):
+        self._skip_BLP03_generate = not self._config.bin2bin.BLP03.generator \
+                                    or not isfile(self._config.bin2bin.BLP03.generator)
+
+    def task_BLP03_generate(self):
+        if self._skip_BLP03_generate:
+            return
+
+        binary, _ = self._outfilenames()
+
+        input_folder = join(self._output, self._folders['BLP03']['out'] + self._folders['BLP03']['suffix'])
+        map_file = join(input_folder, binary + '.map')
+
+        output_folder = join(self._output, self._folders['SLP04']['out'] + self._folders['SLP04']['suffix'])
+        dst = join(input_folder, '.annotations_generated')
+
+        yield {'title'   : lambda task: task.name.replace(':', '', 1),
+               'name'    : '\n   annotation generation',
+               'actions' : [LongRunning(' '.join([GENERATOR,
+                                                self._config.bin2bin.BLP03.generator,
+                                                map_file,
+                                                join(output_folder, 'generator.json'),
+                                                '>', join(output_folder, 'generator.log'),
+                                                '&&', 'touch', dst])), ],
+               'targets' : [dst, ],
+               }
+
+        # ----------------------------------------------------------------------
+        self._updateDot('BLP03_generate', map_file, dst)
+
+    # ==========================================================================
+    def task_BLP03_MERGE(self):
+        if self._skip_BLP03_generate:
+            return
+
+        input_folder = self._folders['SLP04']['out'] + self._folders['SLP04']['suffix']
+        output_folder = self._folders['BLP03']['out'] + self._folders['BLP03']['suffix']
+
+        src1 = join(self._output, input_folder, 'annotations.json')
+        src2 = join(self._output, input_folder, 'generator.json')
+
+        dst = join(self._output, input_folder, 'annotations_generator.json')
+
+        tool = AnnotationMerger(outputs = (input_folder, '.json'))
+
+        yield tool.tasks([src1, src2], dst)
+
+        # ----------------------------------------------------------------------
+        self._updateDot('BLP03_MERGE', [join(self._output, output_folder, '.annotations_generated'), src1, src2], output_folder)
+    # end def task_SLP04_MERGE
 
     # ==========================================================================
     def task_BLP04(self):
@@ -4146,14 +4611,247 @@ class Actc(AbstractDodo):                                                       
         self._skip_BLP04 = self._config.bin2bin.excluded \
                         or self._config.bin2bin.BLP04.excluded
 
+        self._skip_BLP04_INTEGRATE = not self._config.bin2bin.BLP04['self-profiling']
     # end def task_BLP04
+
+    def task_BLP04_INTEGRATE(self):
+        # Check configuration
+        # ----------------------------------------------------------------------
+        if (self._skip_BLP04_INTEGRATE):
+            return
+        # end if
+
+        # input and output folders
+        annotations_folder = self._folders['SLP04']['out'] + self._folders['SLP04']['suffix']  # D01
+        object_folder = self._folders['COMPILE_C']['out'] + self._folders['COMPILE_C']['suffix']  # BC08
+        xtranslator_folder = self._folders['BLP02']['out'] + self._folders['BLP02']['suffix']  # BC03
+        linker_folder = self._folders['BLP03']['out'] + self._folders['BLP03']['suffix']  # BC04
+        extractor_folder = self._folders['BLP01']['out'] + self._folders['BLP01']['suffix']  # BLC02
+        profile_folder = self._folders['BLP00']['out_migrate'] + self._folders['BLP00']['suffix']
+        output_folder = self._folders['BLP04']['out_integrate'] + self._folders['BLP04']['suffix']  # BC05
+
+        # ----------------------------------------------------------------------
+        cbin, dbin = self._outfilenames()
+
+        # source
+        annotations_file = join(self._output, annotations_folder, 'annotations_generator.json')
+        if self._skip_BLP03_generate:
+            annotations_file = join(self._output, annotations_folder, 'annotations.json')
+
+        src = [annotations_file,
+                join(self._output, linker_folder, cbin)]
+
+        # destination
+        dst = [join(self._output, output_folder), ]
+
+        # runtime profiles
+        profiles = join(self._output, profile_folder, 'profiling_data.' + cbin + '.self_profiling')
+        if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(profiles))):
+            profiles = None
+        else:
+            src.append(profiles)
+
+        # options
+        # only apply protections that required additional object files to be linked in
+        options = []
+        options.append('-CM %s' % ('on' if self._binary_annotations['code_mobility'] else 'off'))
+        options.append('-CS off')
+        options.append('-CG %s -CGhack on' % ('on' if (self._binary_annotations['guarded_region'] or self._binary_annotations['guard_attestator'] or self._binary_annotations['guard_verifier']) else 'off'))
+        options.append('-OBF off')
+        options.append('-RA %s' % ('on' if (self._binary_annotations['remote_attestation'] or self._binary_annotations['remote_attestation'])else 'off'))
+        options.append('-SD %s' % ('on' if self._binary_annotations['anti_debugging'] else 'off'))
+        options.append('-SV %s' % ('on' if self._binary_annotations['softvm'] else 'off'))
+        options.append('-CFT %s' % ('on' if self._binary_annotations['cf_tagging'] else 'off'))
+
+        options.extend(['-SP', 'none'])
+
+        options.extend(['-S'])
+
+        # disable branch elimination and branch flipping to preserve correctness of the profile information.
+        # Not doing so will result in some branches in the original binary not to be profiled because they are eliminated.
+        options.extend(['-Obe', 'off'])
+        options.extend(['-Obranchflipping', 'off'])
+
+        # instanciate tool
+        tool = DiabloObfuscator(program = self._config.tools.obfuscator,
+                                options = self._config.bin2bin.BLP04.options
+                                + options ,
+                                aid=self._aid,
+                                softvm_diversity_seed=self._config.bin2bin.bytecode_diversity_seed,
+                                code_mobility_diversity_seed=self._config.bin2bin.code_mobility_diversity_seed,
+                                outputs=[(path, '') for path in dst])
+
+        yield tool.tasks(src,
+                         join(dst[0], dbin),
+                         objdir=join(self._output, object_folder),
+                         stubdir=join(self._output, xtranslator_folder),
+                         vmdir       = join(dirname(self._config.tools.xtranslator),
+                                            'obj', self._config.platform),
+                         chunks_file=join(self._output, extractor_folder, 'annotations_chunks.json'),
+                         runtime_profiles=profiles)
+
+        # ----------------------------------------------------------------------
+        self._updateDot('BLP04_INTEGRATE', [linker_folder, xtranslator_folder, extractor_folder, object_folder, annotations_folder], output_folder)
+
+    # ==========================================================================
+    def task_SERVER_P20_SP_INTEGRATE(self):
+        '''
+        Server side management - code mobility (early deploy for self-profiling code)
+
+        @return (Task)
+        '''
+        # Check configuration
+        # ----------------------------------------------------------------------
+        if self._skip_BLP04_INTEGRATE or self._config.SERVER.excluded:
+            return
+        # end if
+
+        # input and output folders
+        input_folder = self._folders['BLP04']['out_integrate'] + self._folders['BLP04']['suffix']  # BC05
+        output_folder = input_folder  # BC05
+
+        # ----------------------------------------------------------------------
+        src = join(self._output, input_folder, 'mobile_blocks')
+        dst = join(src, '.p20_sp_done')
+
+        if (not (isdir(src) and self._config.SERVER.P20.script)):
+            return
+        # end if
+
+        # Create symlinks before yielding task
+        self._create_symlinks()
+
+        yield {'title'   : lambda task: task.name.replace(':', '', 1),
+               'name'    : '\n   %-20s%s' % ('code mobility (sp)', src),
+               'actions' : [LongRunning(' '.join([self._config.SERVER.P20.script,
+                                                '-a' , self._aid,
+                                                '-p', '20',
+                                                '-i', self._config.SERVER.ip_address,
+                                                src,
+                                                '"[0-9].self_profiling$"',
+                                                '&&', 'touch', dst])), ],
+               'targets' : [dst, ],
+               'file_dep': glob(join(src, 'mobile_dump_*')),
+               }
+
+        # ----------------------------------------------------------------------
+        self._updateDot('SERVER_P20_SP_INTEGRATE', input_folder, output_folder)
+    # end def task_SERVER_P20_SP_INTEGRATE
+
+    # ==========================================================================
+    def task_SERVER_P80_SP_INTEGRATE(self):
+        '''
+        Server side management - remote attestation (early deploy for self-profiling code)
+
+        @return (Task)
+        '''
+        # Check configuration
+        # ----------------------------------------------------------------------
+        if self._skip_BLP04_INTEGRATE or self._config.SERVER.excluded:
+            return
+        # end if
+
+        # input and output folders
+        input_folder = self._folders['SLP07']['out'] + self._folders['SLP07']['suffix']  # BC07
+        output_folder = input_folder  # BC07
+        binary_folder = self._folders['BLP04']['out_integrate'] + self._folders['BLP04']['suffix']  # BC05
+
+        # ----------------------------------------------------------------------
+        src = join(self._output, input_folder)
+        dst = join(src, '.p80_sp_done')
+
+        _, dbin = self._outfilenames()
+
+        if (not (isdir(src) and self._config.SERVER.P80.script)):
+            return
+        # end if
+
+        # Create symlinks before yielding task
+        self._create_symlinks()
+
+        yield {'title'   : lambda task: task.name.replace(':', '', 1),
+               'name'    : '\n   %-20s%s' % ('remote attestation (sp)', src),
+               'actions' : [LongRunning(' '.join([self._config.SERVER.P80.script,
+                                                '-a' , self._aid,
+                                                '-p', '80',
+                                                '-e', join(self._output, input_folder),
+                                                '-b', join(self._output, binary_folder, dbin),
+                                                '&&', 'touch', dst])), ],
+               'targets' : [dst, ],
+               'file_dep': glob(join(src, '*.o')),
+               }
+
+        # ----------------------------------------------------------------------
+        self._updateDot('SERVER_P80_SP_INTEGRATE', input_folder, output_folder)
+    # end def task_SERVER_P80_SP_INTEGRATE
+
+    def task_BLP04_INTEGRATE_SP(self):
+        if (self._skip_BLP04_INTEGRATE):
+            return
+        # end if
+
+        # input and output folders
+        input_folder = self._folders['BLP04']['out_integrate'] + self._folders['BLP04']['suffix']
+        output_folder = input_folder
+
+        # ----------------------------------------------------------------------
+        cbin, _ = self._outfilenames()
+
+        src = join(self._output, input_folder)
+
+        dst = join(src, 'profiles', '.BLP04_INTEGRATE_SPdone')
+
+        p20_sp_done = join(self._output, self._folders['BLP04']['out_integrate'] + self._folders['BLP04']['suffix'], 'mobile_blocks', '.p20_sp_done')
+        p80_sp_done = join(self._output, self._folders['SLP07']['out'] + self._folders['SLP07']['suffix'], '.p80_sp_done')
+
+        if (not (isdir(src) and self._config.bin2bin.BLP04_DYN._01.script and isfile(self._config.bin2bin.BLP04_DYN._01.script))):
+            return
+        # end if
+
+        yield {'title'   : lambda task: task.name.replace(':', '', 1),
+               'name'    : '\n   %-20s%s' % ('collect metrics', src),
+               'actions' : [CmdAction(' '.join([self._config.bin2bin.BLP04_DYN._01.script,
+                                                self._aid,
+                                                src,
+                                                '>', join(src, 'BLP04_INTEGRATE_SP.log'), '2>&1',
+                                                '&&', 'touch', dst])),],
+               'targets' : [dst,],
+               'file_dep': glob(join(src, cbin + '*')),
+               }
+        # ----------------------------------------------------------------------
+        self._updateDot('BLP04_INTEGRATE_SP', [input_folder, p20_sp_done, p80_sp_done], output_folder)
+    # end def task_BLP04_INTEGRATE_SP
+
+    def task_BLP04_INTEGRATE_EXTEND_PROFILE(self):
+        if (self._skip_BLP04_INTEGRATE):
+            return
+        # end if
+
+        cbin, dbin = self._outfilenames()
+
+        profile_name = 'profiling_data.' + cbin + '.self_profiling'
+
+        src_profile_base = join(self._output, self._folders['BLP00']['out_migrate'] + self._folders['BLP00']['suffix'], profile_name)
+        src_profile_integrate = join(self._output, self._folders['BLP04']['out_integrate'] + self._folders['BLP04']['suffix'], 'profiles', profile_name)
+
+        if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(src_profile_base) and isfile(src_profile_integrate))):
+            return
+
+        dst = join(self._output, self._folders['BLP04']['out_extend'] + self._folders['BLP04']['suffix'])
+        dst_profile = join(dst, 'profiling_data.' + cbin + '.profile')
+
+        tool = ProfileExtender(options =    ['--input', src_profile_base, src_profile_integrate]
+                                            + ['--output', dst_profile],
+                                 outputs = (dst, ''))
+        yield tool.tasks(src_profile_base, dst_profile)
+    # end def task_BLP04_INTEGRATE_EXTEND_PROFILE
 
     # ==========================================================================
     def task_BLP04_OBFUSCATE(self):
         '''
         BC04 + D01 (+ BC08 + BC03 + BLC02 (+ BC02_SP/profiles)) --> obfuscation --> BC05
-        
-        #WARNING:  update task_BLP04_DYN_02 accordingly 
+
+        #WARNING:  update task_BLP04_DYN_02 accordingly
 
         @return (Task)
         '''
@@ -4169,22 +4867,17 @@ class Actc(AbstractDodo):                                                       
         xtranslator_folder = self._folders['BLP02']['out'] + self._folders['BLP02']['suffix']  # BC03
         linker_folder = self._folders['BLP03']['out'] + self._folders['BLP03']['suffix']  # BC04
         extractor_folder = self._folders['BLP01']['out'] + self._folders['BLP01']['suffix']  # BLC02
-        profile_folder = join(self._output, 'BLP03_migrate_profile')
         output_folder = self._folders['BLP04']['out'] + self._folders['BLP04']['suffix']  # BC05
 
         # ----------------------------------------------------------------------
-
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.')
-        else:
-            cbin = self._config.src2bin.LINK.binary
-            dbin = self._config.src2bin.LINK.binary
-        #end if
+        cbin, dbin = self._outfilenames()
 
         # source
-        src = [join(self._output, annotations_folder, 'annotations.json'),
+        annotations_file = join(self._output, annotations_folder, 'annotations_generator.json')
+        if self._skip_BLP03_generate:
+            annotations_file = join(self._output, annotations_folder, 'annotations.json')
+
+        src = [annotations_file,
                 join(self._output, linker_folder, cbin)]
 
         # destination
@@ -4193,7 +4886,10 @@ class Actc(AbstractDodo):                                                       
             dst.append(join(self._output, output_folder, 'mobile_blocks'))
 
         # runtime profiles
-        profiles = join(self._output, profile_folder, 'profiles', 'profiling_data.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
+        profiles = join(self._output, self._folders['BLP00']['out_migrate'] + self._folders['BLP00']['suffix'], 'profiling_data.' + cbin + '.profile')
+        if not self._skip_BLP04_INTEGRATE:
+            profiles = join(self._output, self._folders['BLP04']['out_extend'] + self._folders['BLP04']['suffix'], 'profiling_data.' + cbin + '.profile')
+
         if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(profiles))):
             profiles = None
         else:
@@ -4203,7 +4899,7 @@ class Actc(AbstractDodo):                                                       
         options = []
         options.append('-CM %s' % ('on' if self._binary_annotations['code_mobility'] else 'off'))
         options.append('-CS %s' % ('on' if self._binary_annotations['call_stack_check'] else 'off'))
-        options.append('-CG %s' % ('on' if (self._binary_annotations['guarded_region'] or self._binary_annotations['guard_attestator'] or self._binary_annotations['guard_verifier']) else 'off'))
+        options.append('-CG %s -CGhack on' % ('on' if (self._binary_annotations['guarded_region'] or self._binary_annotations['guard_attestator'] or self._binary_annotations['guard_verifier']) else 'off'))
         options.append('-OBF %s' % ('on' if self._binary_annotations['obfuscations'] else 'off'))
         options.append('-RA %s' % ('on' if (self._binary_annotations['remote_attestation'] or self._binary_annotations['remote_attestation'])else 'off'))
         options.append('-SD %s' % ('on' if self._binary_annotations['anti_debugging'] else 'off'))
@@ -4214,9 +4910,11 @@ class Actc(AbstractDodo):                                                       
             options.extend(['-SP', 'none'])
         # end if
 
+        options.extend(['-S', '-ntag on'])
+
         # instanciate tool
         tool = DiabloObfuscator(program = self._config.tools.obfuscator,
-                                options = self._config.bin2bin.BLP04.options
+                                options = self._config.bin2bin.BLP04.options + self._config.bin2bin.BLP04.options_final
                                 + options ,
                                 aid=self._aid,
                                 softvm_diversity_seed=self._config.bin2bin.bytecode_diversity_seed,
@@ -4310,6 +5008,7 @@ class Actc(AbstractDodo):                                                       
                                                 '-p', '20',
                                                 '-i', self._config.SERVER.ip_address,
                                                 src,
+                                                '"[0-9].self_profiling$"',
                                                 '&&', 'touch', dst])), ],
                'targets' : [dst, ],
                'file_dep': glob(join(src, 'mobile_dump_*')),
@@ -4342,12 +5041,7 @@ class Actc(AbstractDodo):                                                       
         src = join(self._output, input_folder)
         dst = join(src, '.p80_sp_done')
 
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.') + '.self_profiling'
-        else:
-            dbin = self._config.src2bin.LINK.binary + '.self_profiling'
-        # end if
+        _, dbin = self._outfilenames()
 
         if (not (isdir(src) and self._config.SERVER.P80.script)):
             return
@@ -4393,17 +5087,14 @@ class Actc(AbstractDodo):                                                       
         output_folder = input_folder  # BC05
 
         # ----------------------------------------------------------------------
-
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-        else:
-            cbin = self._config.src2bin.LINK.binary
-        # end if
+        cbin, _ = self._outfilenames()
 
         src = join(self._output, input_folder)
 
         dst = join(src, 'profiles', '.BLP04_DYN_01done')
+
+        p20_sp_done = join(self._output, self._folders['BLP04']['out'] + self._folders['BLP04']['suffix'], 'mobile_blocks', '.p20_sp_done')
+        p80_sp_done = join(self._output, self._folders['SLP07']['out'] + self._folders['SLP07']['suffix'], '.p80_sp_done')
 
         if (not (isdir(src) and self._config.bin2bin.BLP04_DYN._01.script and isfile(self._config.bin2bin.BLP04_DYN._01.script))):
             return
@@ -4420,15 +5111,15 @@ class Actc(AbstractDodo):                                                       
                'file_dep': glob(join(src, cbin + '*')),
                }
         # ----------------------------------------------------------------------
-        self._updateDot('BLP04_DYN_01', input_folder, output_folder)
+        self._updateDot('BLP04_DYN_01', [input_folder, p20_sp_done, p80_sp_done], output_folder)
     # end def _task_BLP04_DYN_01
 
     # ==========================================================================
     def task_BLP04_DYN_02(self):
         '''
         BC04 + BC05/profiles + D01 (+ BC08 + BC03 + BLC02 --> recompile using execution profile and calculate dynamic metrics--> BC05_DYN
-        
-        #WARNING:  update task_BLP04_OBFUSCATE accordingly 
+
+        #WARNING:  update task_BLP04_OBFUSCATE accordingly
 
         @return (Task)
         '''
@@ -4443,7 +5134,7 @@ class Actc(AbstractDodo):                                                       
 
         # input and output folders
         annotations_folder = self._folders['SLP04']['out'] + self._folders['SLP04']['suffix']  # D01
-        profile_folder = join(self._output, 'BLP03_migrate_profile')
+        profile_folder = self._folders['BLP00']['out_migrate'] + self._folders['BLP00']['suffix']
         object_folder = self._folders['COMPILE_C']['out'] + self._folders['COMPILE_C']['suffix']  # BC08
         xtranslator_folder = self._folders['BLP02']['out'] + self._folders['BLP02']['suffix']  # BC03
         linker_folder = self._folders['BLP03']['out'] + self._folders['BLP03']['suffix']  # BC04
@@ -4452,18 +5143,14 @@ class Actc(AbstractDodo):                                                       
         output_folder = self._folders['BLP04_DYN']['out'] + self._folders['BLP04_DYN']['suffix']  # BC05_DYN
 
         # ----------------------------------------------------------------------
-
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
-            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.')
-        else:
-            cbin = self._config.src2bin.LINK.binary
-            dbin = self._config.src2bin.LINK.binary
-        # end if
+        cbin, dbin = self._outfilenames()
 
         # source
-        src = [join(self._output, annotations_folder, 'annotations.json'),
+        annotations_file = join(self._output, annotations_folder, 'annotations_generator.json')
+        if self._skip_BLP03_generate:
+            annotations_file = join(self._output, annotations_folder, 'annotations.json')
+
+        src = [annotations_file,
                 join(self._output, linker_folder, cbin), ]
 
         # destination
@@ -4472,14 +5159,14 @@ class Actc(AbstractDodo):                                                       
             dst.append(join(self._output, output_folder, 'mobile_blocks'))
 
         # runtime profiles
-        profiles = join(self._output, profile_folder, 'profiles', 'profiling_data.' + cbin + '.profile.BC02-migrated-to-BC04.plaintext')
+        profiles = join(self._output, profile_folder, 'profiles', 'profiling_data.' + cbin + '.profile.BC02-migrated-to-BC04')
         if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(profiles))):
             profiles = None
         else:
             src.append(profiles)
 
         # runtime profiles
-        profiles_obf = join(self._output, obfuscator_folder, 'profiles', 'profiling_data.' + cbin + '.self_profiling.plaintext')
+        profiles_obf = join(self._output, obfuscator_folder, 'profiles', 'profiling_data.' + cbin + '.self_profiling')
         if(not (self._config.bin2bin.BLP04['runtime_profiles'] and isfile(profiles_obf))):
             profiles_obf = None
         else:
@@ -4496,6 +5183,8 @@ class Actc(AbstractDodo):                                                       
         options.append('-SD %s' % ('on' if self._binary_annotations['anti_debugging'] else 'off'))
         options.append('-SV %s' % ('on' if self._binary_annotations['softvm'] else 'off'))
         options.append('-CFT %s' % ('on' if self._binary_annotations['cf_tagging'] else 'off'))
+
+        options.extend(['-S'])
 
         # instanciate tool
         tool = DiabloObfuscator(program=self._config.tools.obfuscator,
@@ -4602,6 +5291,7 @@ class Actc(AbstractDodo):                                                       
                                                 '-p', '20',
                                                 '-i', self._config.SERVER.ip_address,
                                                 src,
+                                                '"[0-9]$"',
                                                 '&&', 'touch', dst])),],
                'targets' : [dst,],
                'file_dep': glob(join(src, 'mobile_dump_*')),
@@ -4634,12 +5324,7 @@ class Actc(AbstractDodo):                                                       
         src = join(self._output, input_folder)
         dst = join(src, '.p80done')
 
-        # a.out|liba.so --> c.out|libc.so
-        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
-            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.')
-        else:
-            dbin = self._config.src2bin.LINK.binary
-        #end if
+        _, dbin = self._outfilenames()
 
         if (not (isdir(src) and self._config.SERVER.P80.script)):
             return
@@ -4664,7 +5349,7 @@ class Actc(AbstractDodo):                                                       
     # ==========================================================================
     def task_SERVER_RENEWABILITY_CREATE(self):
         '''
-        Server side management -  renewability - register application 
+        Server side management -  renewability - register application
 
         @return (Task)
         '''
@@ -4932,7 +5617,7 @@ class Actc(AbstractDodo):                                                       
              cwd = self._output)
 
     # end def processDot
-    
+
     def _create_symlinks(self):
         '''
         Creates symlinks to the cached folders
@@ -4963,6 +5648,18 @@ class Actc(AbstractDodo):                                                       
                                'srcs': toList(src),
                                'dsts': toList(dst)})
     # end def _dot
+
+    def _outfilenames(self):
+        # a.out|liba.so --> c.out|libc.so
+        if self._config.src2bin.LINK.binary.endswith(('a.out', 'liba.so')):
+            cbin = self._config.src2bin.LINK.binary.replace('a.', 'c.')
+            dbin = self._config.src2bin.LINK.binary.replace('a.', 'd.')
+        else:
+            cbin = self._config.src2bin.LINK.binary
+            dbin = self._config.src2bin.LINK.binary
+        #end if
+
+        return cbin, dbin
 
 
 

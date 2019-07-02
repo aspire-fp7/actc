@@ -287,7 +287,8 @@ class AbstractCmdTool(AbstractTool):
 
     def __init__(self, program   = 'path',
                        options   = None,
-                       outputs   = None):
+                       outputs   = None,
+                       exit_if_pgm_not_exist = True):
         '''
         Constructor
 
@@ -299,7 +300,7 @@ class AbstractCmdTool(AbstractTool):
         '''
         # str:   'executable'
         # list: ['executable', 'script']
-        self._program   = self._check(program)
+        self._program   = self._check(program, exit_if_pgm_not_exist)
 
         self._options   = toList(options)
 
@@ -308,7 +309,7 @@ class AbstractCmdTool(AbstractTool):
 
 
     @staticmethod
-    def _check(program):
+    def _check(program, exit_if_pgm_not_exist):
         '''
         Check program path
 
@@ -318,6 +319,7 @@ class AbstractCmdTool(AbstractTool):
         '''
         programs = toList(program)
 
+        index = 0
         for name in programs:
 
             # Current Working Directory?
@@ -331,8 +333,14 @@ class AbstractCmdTool(AbstractTool):
                     break
                 # end if
             else:
-                sys.exit('actc.py: error: program not found: %s' % (name,))
+                if exit_if_pgm_not_exist:
+                    foo()
+                    sys.exit('actc.py: error: program not found: %s' % (name,))
+                else:
+                    programs[index] = '/bin/true'
             # end for
+
+            index += 1
         # end for
 
         return programs

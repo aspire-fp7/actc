@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------------------
 # Copyright (c) 2014-2016 Nagravision S.A., Gemalto S.A., Ghent University
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -52,8 +52,10 @@ from actc.tools.data            import DATA_OBFUSCATE
 from actc.tools.diablo          import DIABLO_EXTRACTOR
 from actc.tools.diablo          import DIABLO_OBFUSCATOR
 from actc.tools.diablo          import DIABLO_SELFPROFILING
+from actc.tools.diablo          import DIABLO_SP_SOURCE
 from actc.tools.codesurfer      import CSURF
 from actc.tools.compiler        import FRONTEND
+from actc.tools.compiler        import FRONTEND_FORTRAN
 from actc.tools.remote          import ATTESTATOR_SELECTOR
 from actc.tools.remote          import ANTI_CLONING
 from actc.tools.remote          import REACTION_UNIT
@@ -75,9 +77,11 @@ from actc.tools.renewability    import RENEWABILITY_REVISION_DURATION
 from actc.tools.renewability    import RENEWABILITY_TIMEOUT_MANDATORY
 
 CODE_MOBILITY  = '/opt/code_mobility'
+CODE_MOBILITY_SOURCE = 'NOT_HERE'
 ACCL           = '/opt/ACCL'
 ASCL           = '/opt/ASCL'
 ANTI_DEBUGGING = '/opt/anti_debugging'
+ANTI_DEBUGGING_SOURCE = 'NOT_HERE'
 
 # ------------------------------------------------------------------------------
 # implementation
@@ -169,6 +173,8 @@ class Config(AttrDict):
         '''
         return {
           'platform' : '?',
+          'explicit_static' : False,
+          'debug_support_code': False,
 
           'tools':   {
               # libraries
@@ -192,15 +198,19 @@ class Config(AttrDict):
               'cft':                    CFT,
               # src2bin
               'frontend':               FRONTEND,
+              'frontend_fortran':       FRONTEND_FORTRAN,
               # bin2bin
               'extractor':              DIABLO_EXTRACTOR,
               'xtranslator':            XTRANSLATOR,
               'code_mobility':          CODE_MOBILITY,
+              'code_mobility_source':   CODE_MOBILITY_SOURCE,
               'accl':                   ACCL,
               'ascl':                   ASCL,
               'anti_debugging':         ANTI_DEBUGGING,
+              'anti_debugging_source':  ANTI_DEBUGGING_SOURCE,
               'obfuscator':             DIABLO_OBFUSCATOR,
               'obfuscator_sp':          DIABLO_SELFPROFILING,
+              'sp_source':              DIABLO_SP_SOURCE,
               'renewability':           RENEWABILITY,
               },
 
@@ -213,6 +223,7 @@ class Config(AttrDict):
                   'annotations_patch':      '',
                   'external_annotations':   '',
                   'source':                 [],
+                  'extended_copy':          '',
                   },
 
               'SLP02': {
@@ -339,7 +350,9 @@ class Config(AttrDict):
               'options' : [],
 
               'PREPROCESS': {
+                  'can_sort_options': True,
                   'options': [],
+                  'c_standard': '',
                   },
 
               'COMPILE' : {
@@ -402,7 +415,8 @@ class Config(AttrDict):
 
               'BLP03': {
                   'excluded': True,
-                  'options' : []
+                  'options' : [],
+                  'generator': '',
                   },
 
               # diablo-obfuscator
@@ -416,6 +430,7 @@ class Config(AttrDict):
                   'call_stack_check': True,
                   'softvm'          : True,
                   'code_mobility'   : True,
+                  'options_final'   : [],
                   },
 
               # Generate dynamic metrics using diablo obfuscator
@@ -646,6 +661,13 @@ class Config(AttrDict):
 ''' % {'PLATFORM' : self._item2json(self.platform)})
 
         lines.append('''\
+  "explicit_static" : %(EXPLICIT_STATIC)s,
+  "debug_support_code": %(DEBUG_SUPPORT_CODE)s,
+''' % { 'EXPLICIT_STATIC' : self._item2json(self.explicit_static),
+        'DEBUG_SUPPORT_CODE': self._item2json(self.debug_support_code)
+      })
+
+        lines.append('''\
   // Tools
   "tools": {
     // libraries
@@ -668,15 +690,19 @@ class Config(AttrDict):
     "cft":                    %(CFT)s,
     // src2bin
     "frontend":               %(FRONTEND)s,
+    "frontend_fortran":       %(FRONTEND_FORTRAN)s,
     // bin2bin
     "extractor":              %(EXTRACTOR)s,
     "xtranslator":            %(XTRANSLATOR)s,
     "code_mobility":          %(CODE_MOBILITY)s,
+    "code_mobility_source":   %(CODE_MOBILITY_SOURCE)s,
     "accl":                   %(ACCL)s,
     "ascl":                   %(ASCL)s,
     "anti_debugging":         %(ANTI_DEBUGGING)s,
+    "anti_debugging_source":  %(ANTI_DEBUGGING_SOURCE)s,
     "obfuscator":             %(OBFUSCATOR)s,
     "obfuscator_sp":          %(OBFUSCATOR_SP)s,
+    "sp_source":              %(SP_SOURCE)s,
     "renewability":           %(RENEWABILITY)s
   },
 ''' % {'THIRD_PARTY':            self._item2json(self.tools.third_party),
@@ -696,14 +722,18 @@ class Config(AttrDict):
        'DCL':                    self._item2json(self.tools.dcl),
        'CFT':                    self._item2json(self.tools.cft),
        'FRONTEND':               self._item2json(self.tools.frontend),
+       'FRONTEND_FORTRAN':       self._item2json(self.tools.frontend_fortran),
        'EXTRACTOR':              self._item2json(self.tools.extractor),
        'CODE_MOBILITY':          self._item2json(self.tools.code_mobility),
+       'CODE_MOBILITY_SOURCE':   self._item2json(self.tools.code_mobility_source),
        'ACCL':                   self._item2json(self.tools.accl),
        'ASCL':                   self._item2json(self.tools.ascl),
        'ANTI_DEBUGGING':         self._item2json(self.tools.anti_debugging),
+       'ANTI_DEBUGGING_SOURCE':  self._item2json(self.tools.anti_debugging_source),
        'XTRANSLATOR':            self._item2json(self.tools.xtranslator),
        'OBFUSCATOR':             self._item2json(self.tools.obfuscator),
        'OBFUSCATOR_SP':          self._item2json(self.tools.obfuscator_sp),
+       'SP_SOURCE':              self._item2json(self.tools.sp_source),
        'RENEWABILITY':          self._item2json(self.tools.renewability),
        })
 
@@ -724,13 +754,15 @@ class Config(AttrDict):
       "traverse":               %(TRAVERSE)s,
       "annotations_patch":      %(ANNOTATIONS_PATCH)s,
       "external_annotations":   %(EXTERNAL_ANNOTATIONS)s,
-      "source"  :               %(SOURCE)s
+      "source"  :               %(SOURCE)s,
+      "extended_copy":          %(EXTENDED_COPY)s
     },
 ''' % {'EXCLUDED': self._item2json(self.src2src.SLP01.excluded),
        'TRAVERSE': self._item2json(self.src2src.SLP01.traverse),
        'ANNOTATIONS_PATCH': self._item2json(self.src2src.SLP01.annotations_patch),
        'EXTERNAL_ANNOTATIONS': self._item2json(self.src2src.SLP01.external_annotations),
        'SOURCE'  : self._item2json(self.src2src.SLP01.source, sort = True),
+       'EXTENDED_COPY': self._item2json(self.src2src.SLP01.extended_copy)
        })
 
         lines.append('''\
@@ -967,9 +999,13 @@ class Config(AttrDict):
       // -isystem <dir>
       // -include <file>
       // -D<macro[=defn]>
-      "options"    : %(OPTIONS)s
+      "can_sort_options": %(CAN_SORT_OPTIONS)s,
+      "options"    : %(OPTIONS)s,
+      "c_standard": %(C_STANDARD)s
     },
-''' % {'OPTIONS' : self._item2json(self.src2bin.PREPROCESS.options, sort = True),
+''' % { 'CAN_SORT_OPTIONS': self._item2json(self.src2bin.PREPROCESS.can_sort_options),
+        'OPTIONS' : self._item2json(self.src2bin.PREPROCESS.options, sort = self.src2bin.PREPROCESS.can_sort_options),
+        'C_STANDARD': self._item2json(self.src2bin.PREPROCESS.c_standard),
        })
 
         lines.append('''\
@@ -1036,7 +1072,7 @@ class Config(AttrDict):
     // vanilla self-profiling
     "BLP00": {
       "excluded": %(EXCLUDED)s,
-    
+
 ''' % {'EXCLUDED': self._item2json(self.bin2bin.BLP00.excluded)
        })
 
@@ -1097,10 +1133,12 @@ class Config(AttrDict):
     // Code Integration
     "BLP03": {
       "excluded": %(EXCLUDED)s,
-      "options" : %(OPTIONS)s
+      "options" : %(OPTIONS)s,
+      "generator": %(GENERATOR)s
     },
 ''' % {'EXCLUDED': self._item2json(self.bin2bin.BLP03.excluded),
        'OPTIONS' : self._item2json(self.bin2bin.BLP03.options, sort = True),
+       'GENERATOR': self._item2json(self.bin2bin.BLP03.generator),
        })
 
         lines.append('''\
@@ -1114,7 +1152,8 @@ class Config(AttrDict):
       "obfuscations"    : %(OBF)s,
       "call_stack_check": %(CS)s,
       "softvm"          : %(SV)s,
-      "code_mobility"   : %(CM)s
+      "code_mobility"   : %(CM)s,
+      "options_final"   : %(OPTIONS_FINAL)s
     },
 ''' % {'EXCLUDED': self._item2json(self.bin2bin.BLP04.excluded),
        'OPTIONS' : self._item2json(self.bin2bin.BLP04.options, sort = True),
@@ -1125,6 +1164,7 @@ class Config(AttrDict):
        'CS'      : self._item2json(self.bin2bin.BLP04['call_stack_check']),
        'SV'      : self._item2json(self.bin2bin.BLP04['softvm']),
        'CM'      : self._item2json(self.bin2bin.BLP04['code_mobility']),
+       'OPTIONS_FINAL' : self._item2json(self.bin2bin.BLP04['options_final']),
        })
 
         lines.append('''\

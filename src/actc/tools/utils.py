@@ -37,16 +37,28 @@
 # ------------------------------------------------------------------------------
 # imports
 # ------------------------------------------------------------------------------
+from glob                       import iglob
+from os.path                    import abspath
 from os.path                    import dirname
+from os.path                    import getsize
 from os.path                    import isdir
+from os.path                    import join
+from os.path                    import basename
 from shutil                     import copyfile
 import copy
 
+from doit.action                import CmdAction
+
 from actc.tools                 import AbstractBasicPythonTool
+from actc.tools                 import AbstractBasicCmdTool
+from actc.tools                 import AbstractCmdTool
+from actc.tools                 import toList
 
 # ------------------------------------------------------------------------------
 # implementation
 # ------------------------------------------------------------------------------
+
+INCLUDE_PATH_REWRITER = '/projects/scripts/include_rel2abs.sh'
 
 class Copier(AbstractBasicPythonTool):
     '''
@@ -64,6 +76,82 @@ class Copier(AbstractBasicPythonTool):
 
 # end class Copier
 
+class ExtendedCopier(AbstractCmdTool):
+    '''
+    Preprocesor
+    '''
+
+    def __init__(self, program = INCLUDE_PATH_REWRITER,
+                       options = None,
+                       outputs = ('')):
+        '''
+        @copydoc actc.tools.AbstractBasicCmdTool.__init__
+        '''
+        super(ExtendedCopier, self).__init__(program = program,
+                                           options = options,
+                                           outputs = outputs)
+    # end def __init__
+
+    _ACTION = 'extended copy'
+
+    def _cmd(self, task, source):
+        '''
+        @copydoc actc.tools.AbstractBasicCmdTool._cmd
+        '''
+        args = list(self._program)
+
+        # options
+        args.extend(self._options)
+
+        # input
+        args.append(source)
+
+        # output
+        args.append(task.targets[0])
+
+        return ' '.join(args)
+    # end def _cmd
+
+    def tasks(self, *args, **kwargs):
+        '''
+        @copydoc actc.tools.AbstractCmdTool.tasks
+        '''
+        # Create Folders
+        yield super(ExtendedCopier, self).tasks(*args, **kwargs)
+
+        # Process Files
+        path, ext = self._outputs[0]
+
+        for arg in toList(args[0]):
+            for src in iglob(abspath(arg)):
+
+                if not getsize(src):
+                    continue
+                # end if
+
+                dst = join(path, basename(src) + ext)
+
+                if (len(args) == 3):
+                    dst = sub(args[1], args[2], dst)
+                # end if
+
+                yield {'name'    : self._name(self._ACTION, src, '\ninto', dst),
+                       'title'   : self._title,
+                       'actions' : [CmdAction(self._cmd), ],
+                       # HACK, file_dep does not maintain ordering
+                       'params'  : [{'name'   : 'source',
+                                     'short'  : None,
+                                     'default': src,
+                        }],
+                       'targets' : [dst, ],
+                       'file_dep': [src, ],
+                       'task_dep' : ['_createfolder_' + path]
+                       }
+            # end for
+        # end for
+    # end def tasks
+
+# end class ExtendedCopier
 
 
 def make_hash(o):

@@ -57,7 +57,8 @@ from actc.tools                 import AbstractPythonTool
 # ------------------------------------------------------------------------------
 
 DIABLO_EXTRACTOR = '/opt/diablo/bin/diablo-extractor'
-CONVERTER = '/opt/diablo/scripts/profiles/reverse-translate.py'
+CONVERTER = '/opt/diablo/bin/scripts/profiles/reverse-translate.py'
+EXTENDER = '/opt/diablo/bin/scripts/profiles/extend-profiles.py'
 
 class ProfileTranslator(AbstractBasicCmdTool):
     '''
@@ -76,6 +77,38 @@ class ProfileTranslator(AbstractBasicCmdTool):
     # end def __init__
 
     _ACTION = 'profiletranslation'
+
+    def _cmd(self, task):                                                 # pylint:disable=W0221
+        '''
+        @copydoc actc.tools.AbstractCmdTool._cmd
+        '''
+        args = list(self._program)
+
+        # options
+        args.extend(self._options)
+
+        return ' '.join(args)
+    # end def _cmd
+
+# end class ProfileTranslator
+
+class ProfileExtender(AbstractBasicCmdTool):
+    '''
+    ProfileExtender
+    '''
+
+    def __init__(self, program = EXTENDER,
+                       options = None,
+                       outputs = ('build/bin', '.out')):
+        '''
+        @copydoc actc.tools.AbstractCmdTool.__init__
+        '''
+        super(ProfileExtender, self).__init__(program = program,
+                                     options = options,
+                                     outputs = outputs)
+    # end def __init__
+
+    _ACTION = 'profileextension'
 
     def _cmd(self, task):                                                 # pylint:disable=W0221
         '''
@@ -113,7 +146,7 @@ class DiabloExtractor(AbstractCmdTool):
 
     _ACTION = 'extract'
 
-    def _cmd(self, task, annotfile, objdir, bindir, binary):                                                       # pylint:disable=W0221
+    def _cmd(self, task, annotfile, objdir, bindir, runtime_profiles, binary):                                                       # pylint:disable=W0221
         '''
         @copydoc actc.tools.AbstractCmdTool._cmd
         '''
@@ -147,6 +180,14 @@ class DiabloExtractor(AbstractCmdTool):
         args.append('--dots-before-path')
         args.append(join(bindir, 'diablo-extractor-dots-before'))
 
+        if(runtime_profiles):
+            args.append('--rawprofiles')
+            args.append('on')
+
+        if(runtime_profiles):
+            args.append('--blockprofilefile')
+            args.append(runtime_profiles)
+
         # <binary>
         args.append(binary)
 
@@ -167,15 +208,15 @@ class DiabloExtractor(AbstractCmdTool):
         # Process Files
         path, _ = self._outputs[0]
 
-        src = args[0]
-        dst = join(path, basename(src).split('.', 1)[0] + '_chunks.json')
+        srcs = toList(args[0])
+        dst = join(path, basename(srcs[0]).split('.', 1)[0] + '_chunks.json')
 
-        yield {'name'    : self._name(self._ACTION, src, '\ninto', dst),
+        yield {'name'    : self._name(self._ACTION, srcs, '\ninto', dst),
                'title'   : self._title,
                'actions' : [CmdAction(self._cmd),],
                'params'  : [{'name'   : 'annotfile',
                              'short'  : None,
-                             'default': src,
+                             'default': srcs[0],
                              },
                             {'name'   : 'objdir',
                              'short'  : None,
@@ -185,6 +226,10 @@ class DiabloExtractor(AbstractCmdTool):
                              'short'  : None,
                              'default': kwargs.get('bindir', '.'),
                              },
+                            {'name'   : 'runtime_profiles',
+                             'short'  : None,
+                             'default': kwargs.get('runtime_profiles', None),
+                             },
                             {'name'   : 'binary',
                              'short'  : None,
                              'default': kwargs.get('binary'),
@@ -192,8 +237,7 @@ class DiabloExtractor(AbstractCmdTool):
                             ],
                'targets' : [dst,
                             ],
-               'file_dep': [src,
-                            ],
+               'file_dep': srcs,
                'task_dep': ['_createfolder_' + path]
                        }
     # end def tasks
@@ -206,6 +250,7 @@ DIABLO_SELFPROFILING = '/opt/diablo/bin/diablo-selfprofiling'
 
 DIABLO_SP_OBJ_LINUX = '/opt/diablo/obj/printarm_linux.o'
 DIABLO_SP_OBJ_ANDROID = '/opt/diablo/obj/printarm_android.o'
+DIABLO_SP_SOURCE = 'NOT_HERE'
 
 class DiabloObfuscator(AbstractCmdTool):
     '''
@@ -516,7 +561,7 @@ def generateDiabloCommand(program, options, self_profiling, softvm_diversity_see
 
     if(runtime_profiles or runtime_profiles_obf):
         args.append('--rawprofiles')
-        args.append('off')
+        args.append('on')
 
     if(runtime_profiles):
         args.append('--blockprofilefile')
