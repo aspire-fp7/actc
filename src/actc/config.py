@@ -65,6 +65,7 @@ from actc.tools.wbc             import ANNOTATION_READER
 from actc.tools.wbc             import CONFIG
 from actc.tools.wbc             import CONVERT_PRAGMAS
 from actc.tools.wbc             import WBC
+from actc.tools.wbc             import WBC_PUBLIC
 from actc.tools.wbc             import WBTA
 from actc.tools.wbc             import WBTA_LICENSE
 from actc.tools.xtranslator     import XTRANSLATOR
@@ -181,6 +182,7 @@ class Config(AttrDict):
               'wbta_license':           WBTA_LICENSE,
               'convert_pragmas':        CONVERT_PRAGMAS,
               'wbc':                    WBC,
+              'wbc_public':             WBC_PUBLIC,
               'read_annot':             READ_ANNOT,
               'data_obfuscate':         DATA_OBFUSCATE,
               'client_server_splitter': CLIENT_SERVER_SPLITTER,

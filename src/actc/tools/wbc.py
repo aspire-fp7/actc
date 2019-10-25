@@ -765,6 +765,171 @@ fi
     # end def tasks
 # end class WbcRenewabilityGenerator
 
+WBC_PUBLIC="/opt/wbc_public/main"
+
+class WbcPublicWbcRenewabilityGenerator(AbstractPythonTool):
+    def __init__(self, outputs=None, config=None):
+        '''
+        @copydoc actc.tools.AbstractPythonTool.__init__
+        '''
+        super(WbcPublicWbcRenewabilityGenerator, self).__init__(outputs=outputs)
+        self._config = config
+
+    # end def __init__
+
+    _ACTION = 'generate script'
+
+    def _python(self, task, pre_opts, compile_opts, frontend, json_path, patch_tool):
+        '''
+        @copydoc actc.tools.AbstractPythonTool._cmd
+        '''
+        src = list(task.file_dep)[0]
+        dst = task.targets[0]
+        path = join(dirname(task.targets[0]), dst.split('.', 1)[0])
+
+        # Hack: parallel execution issue (create_folder not yet finished)
+        while (not isdir(dirname(dst))):
+            sleep(0.01)
+
+        srcfile = join(path, src)
+
+        with open(dst, 'w') as script_file:
+            script_file.write(
+'''#!/usr/bin/env bash
+
+# Parameters:
+# 1: directory containing the mobile blocks to be patched
+
+function usage {
+  echo "Usage: ./%(SCRIPT)s <mobile_block_dir>"
+  exit -1
+}
+
+
+# Check the number of parameters
+if [ "$#" -ne 1 ]; then
+    usage
+fi
+
+cd %(RENEWABILITY_DIR)s
+
+cp %(SRCFILE)s .
+
+# TODO: fetch table name and key from annotations!! TODO
+%(WBC_TOOL)s --decrypt --extEnc=0 --create-table WBTables
+
+mobile_block_dir=$( readlink -e $1 )
+
+if [ ! -d ${mobile_block_dir} ]; then
+    usage
+fi
+
+''' % { 'WBC_TOOL' : str(self._config.tools.wbc_public),
+        'SCRIPT' : basename(dst),
+        'RENEWABILITY_DIR': dirname(dst),
+        'SRCFILE': srcfile})
+
+            # =============
+            # COMPILATION
+            # =============
+            compilation = list([self._config.tools.frontend, ])
+
+            # options
+            compilation.extend(compile_opts)
+
+            # input
+            compilation.append('-c')
+            compilation.append(basename(src))
+
+            # TODO: include the headers:
+            compilation.append('-I../../../..')
+
+            # output
+            compilation.append('-o')
+            compilation.append(basename(src) + '.o')
+
+            script_file.write(' '.join(compilation) + '\n')
+
+            # ==================
+            # PATCH MOBILE BLOCK
+            # ==================
+            tool_name = 'update_mobile_blocks.sh'
+
+            patch = list([join(patch_tool, tool_name), ])
+            patch.append('${mobile_block_dir}')
+            patch.append("`pwd`/"+ basename(src) + '.o')
+            patch.append('wbc_public_' + basename(src).split('.', 1)[0])
+
+            script_file.write(' '.join(patch) + '\n')
+
+        # end with
+
+        # Make file executable
+        st = os.stat(dst)
+        os.chmod(dst, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+        # end if
+    def tasks(self, *args, **kwargs):
+        '''
+        @copydoc actc.tools.AbstractPythonTool.tasks
+        '''
+        # Create Folders
+        yield super(WbcPublicWbcRenewabilityGenerator, self).tasks(*args, **kwargs)
+
+        # Process Files
+        path, _ = self._outputs[0]
+
+        for arg in toList(args[0]):
+            for src in iglob(abspath(arg)):
+
+                if not getsize(src):
+                    continue
+                # end if
+
+                found = False
+                with open(src, 'r') as file:
+                    for line in file:
+                        if '_Pragma("ASPIRE begin protection(publicwbc,renewable)")' in line:
+                            found = True
+
+                if not found:
+                    continue
+
+                dst = join(path, "renew_" + basename(src).split('.', 1)[0] + ".sh")
+
+
+                yield {'name'    : self._name(self._ACTION, src, '\ninto', dst),
+                       'title'   : self._title,
+                       'actions' : [self._python, ],
+                       'params'  : [{'name'   : 'pre_opts',
+                             'short'  : None,
+                             'default': kwargs.get('pre_opts', ''),
+                             },
+                             {'name'   : 'compile_opts',
+                             'short'  : None,
+                             'default': kwargs.get('compile_opts', ''),
+                             },
+                             {'name'   : 'frontend',
+                             'short'  : None,
+                             'default': kwargs.get('frontend', ''),
+                             },
+                             {'name'   : 'json_path',
+                             'short'  : None,
+                             'default': kwargs.get('json_path', ''),
+                             },
+                             {'name'   : 'patch_tool',
+                             'short'  : None,
+                             'default': kwargs.get('patch_tool', ''),
+                             },
+                            ],
+                       'targets' : [dst, ],
+                       'file_dep': [src, ],
+                       }
+            # end for
+        # end for
+    # end def tasks
+
+
 # ------------------------------------------------------------------------------
 # END OF FILE
 # ------------------------------------------------------------------------------

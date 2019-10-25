@@ -115,6 +115,7 @@ from actc.tools.wbc             import WbcXmlConfigGenerator
 from actc.tools.wbc             import WbcLicenseTool
 from actc.tools.wbc             import WbcWhiteBoxTool
 from actc.tools.wbc             import WbcRenewabilityGenerator
+from actc.tools.wbc             import WbcPublicWbcRenewabilityGenerator
 
 from actc.tools.xtranslator     import Xtranslator
 
@@ -426,6 +427,50 @@ class Actc(AbstractDodo):                                                       
         # ----------------------------------------------------------------------
         self._updateDot('SPLIT_C', input_folder, output_folder)
     # end def task_SPLIT_C
+
+    # ==========================================================================
+    def task_PUBLIC_CPP_WBC_RENEWABILITY(self):
+        '''
+        SC012 --> check cpp files containing '_Pragma("ASPIRE begin protection(publicwbc,renewable)")'
+
+        @return (Task)
+        '''
+        # Check configuration
+        # ----------------------------------------------------------------------
+        if (self._skip_SLP01):
+            return
+        # end if
+
+        # input and output folders
+        #input_folder = self._folders['SPLIT_CPP']['out'] + self._folders['SPLIT_CPP']['suffix']
+        input_folder = self._folders['SLP01']['out'] + self._folders['SLP01']['suffix']
+
+        output_folder = self._folders['SPLIT_CPP']['out'] + "_R" + self._folders['SPLIT_CPP']['suffix']
+
+        # Split *.cpp | *.hpp | *.h
+        # ----------------------------------------------------------------------
+        src  = [join(self._output, input_folder, '*.cpp')]
+
+        dst  = join(self._output, output_folder)
+
+        compile_opts = self._config.src2bin.options \
+                            + self._config.src2bin.PREPROCESS.options \
+                            + ['-D', 'ASPIRE_AID=%s' % (self._aid,)] \
+                            + self._config.src2bin.COMPILE.options \
+                            + self._config.src2bin.COMPILE.options_c \
+                            + ['-g',
+                               '-mfloat-abi=softfp',
+                               '-msoft-float',
+                               '-mfpu=neon']
+
+
+        tool = WbcPublicWbcRenewabilityGenerator(outputs = (dst, ''), config=self._config)
+
+        yield tool.tasks(src, compile_opts=compile_opts, patch_tool=self._config.tools.code_mobility)
+
+        # ----------------------------------------------------------------------
+        self._updateDot('task_PUBLIC_CPP_WBC_RENEWABILITY', input_folder, output_folder)
+    # end def task_PUBLIC_CPP_WBC_RENEWABILITY
 
 
     # ==========================================================================
