@@ -175,6 +175,11 @@ class Config(AttrDict):
           'platform' : '?',
           'explicit_static' : False,
           'debug_support_code': False,
+          'floating_point_abi': 'softfp',
+
+          'variables': {
+            'source_root': ''
+          },
 
           'tools':   {
               # libraries
@@ -663,8 +668,18 @@ class Config(AttrDict):
         lines.append('''\
   "explicit_static" : %(EXPLICIT_STATIC)s,
   "debug_support_code": %(DEBUG_SUPPORT_CODE)s,
+  "floating_point_abi" : %(FLOATING_POINT_ABI)s,
 ''' % { 'EXPLICIT_STATIC' : self._item2json(self.explicit_static),
-        'DEBUG_SUPPORT_CODE': self._item2json(self.debug_support_code)
+        'DEBUG_SUPPORT_CODE': self._item2json(self.debug_support_code),
+        'FLOATING_POINT_ABI': self._item2json(self.floating_point_abi)
+      })
+
+        lines.append('''\
+  // Variables
+  "variables": {
+    "source_root": %(SOURCE_ROOT)s
+  },
+''' % { 'SOURCE_ROOT' : self._item2json(self.variables.source_root)
       })
 
         lines.append('''\

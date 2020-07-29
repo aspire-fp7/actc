@@ -128,6 +128,20 @@ from actc.tools.renewability    import RenewabilityPolicy
 
 GENERATOR="/projects/scripts/generate-annotation-file.sh"
 
+def CompilerFloatOptions(floating_point_abi):
+    result = ['-mfloat-abi=%s' % floating_point_abi]
+
+    if floating_point_abi == 'soft':
+        # -mfpu is ignored
+        result.append('-msoft-float')
+    elif floating_point_abi == 'softfp':
+        result.append('-mfpu=neon')
+        result.append('-msoft-float')
+    elif floating_point_abi == 'hard':
+        result.append('-mfpu=neon')
+
+    return result
+
 def CompilerLibraryPath(compiler, library, explicit_static):
     result = ''
 
@@ -343,6 +357,26 @@ class Actc(AbstractDodo):                                                       
 
     # pylint:disable=W0212
 
+    def expand_string(self, s):
+        def internal_expand(x):
+            # replace variables
+            x = x.replace('$[SOURCE_ROOT]', self._config.variables.source_root)
+            x = x.replace('$[CONFIG_PATH]', dirname(self._json))
+
+            return x
+        #end def
+
+        result = None
+
+        if isinstance(s, list):
+            result = [internal_expand(t) for t in s]
+        else:
+            result = internal_expand(s)
+        #end if
+
+        return result
+    # end def expand_string
+
     # ==========================================================================
     def task_SLP01(self):
         '''
@@ -375,16 +409,23 @@ class Actc(AbstractDodo):                                                       
                 archive_name = "archive_%d.a" % self._archive_uid
                 archive_contents = []
                 for filename in lst:
-                    archive_contents.append(basename(filename))
-                    src.append(filename)
+                    e_filename = self.expand_string(filename)
+                    if not isfile(e_filename):
+                        assert False, "ERROR: source file '%s' not found" % e_filename
+                    archive_contents.append(basename(e_filename))
+                    src.append(e_filename)
                 self._archives.append((archive_name, archive_contents))
                 self._archive_uid += 1
             else:
                 # object file that should not be put in an archive
                 # this can be needed for, e.g., object files that define symbols which need to be exported from a shared library
                 # using a version file (see the libdiamante use case in Aspire)
-                self._not_in_archive.append(basename(lst))
-                src.append(lst)
+                e_filename = self.expand_string(lst)
+                if not isfile(e_filename):
+                    assert False, "ERROR: source file '%s' not found" % e_filename
+                self._not_in_archive.append(basename(e_filename))
+                src.append(e_filename)
+        self._source_files = src
 
         # Copy ADSS generated patch file if present
         if(self._config.src2src.SLP01.annotations_patch):
@@ -770,7 +811,7 @@ class Actc(AbstractDodo):                                                       
 
         tool = Preprocessor(program = self._config.tools.frontend,
                             options = self._config.src2bin.options
-                            + self._config.src2bin.PREPROCESS.options
+                            + self.expand_string(self._config.src2bin.PREPROCESS.options)
                             + ['-D', 'ASPIRE_AID=%s' % (self._aid,)],
                             outputs = (dst, '.i'))
 
@@ -933,7 +974,7 @@ class Actc(AbstractDodo):                                                       
 
         tool = Preprocessor(program = self._config.tools.frontend,
                             options = self._config.src2bin.options
-                            + self._config.src2bin.PREPROCESS.options
+                            + self.expand_string(self._config.src2bin.PREPROCESS.options)
                             + ['-I', join(self._output, sources_folder),
                                '-D', 'ASPIRE_AID=%s' % (self._aid,)],
                             outputs = (dst, '.i'))
@@ -1095,7 +1136,7 @@ class Actc(AbstractDodo):                                                       
 
         tool = Preprocessor(program = self._config.tools.frontend,
                             options = self._config.src2bin.options
-                                    + self._config.src2bin.PREPROCESS.options
+                                    + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                     + ['-I', join(self._output, include_folder),
                                        '-D', 'ASPIRE_AID=%s' % (self._aid,)],
                             outputs = (dst, '.i'))
@@ -1244,18 +1285,16 @@ class Actc(AbstractDodo):                                                       
 
         wbta_tool = self._config.tools.wbta
         pre_opts = self._config.src2bin.options \
-                            + self._config.src2bin.PREPROCESS.options \
+                            + self.expand_string(self._config.src2bin.PREPROCESS.options) \
                             + ['-I', join(self._output, include_folder),
                                '-D', 'ASPIRE_AID=%s' % (self._aid,)]
         compile_opts = self._config.src2bin.options \
-                            + self._config.src2bin.PREPROCESS.options \
+                            + self.expand_string(self._config.src2bin.PREPROCESS.options) \
                             + ['-D', 'ASPIRE_AID=%s' % (self._aid,)] \
                             + self._config.src2bin.COMPILE.options \
                             + self._config.src2bin.COMPILE.options_c \
-                            + ['-g',
-                               '-mfloat-abi=softfp',
-                               '-msoft-float',
-                               '-mfpu=neon']
+                            + CompilerFloatOptions(self._config.floating_point_abi) \
+                            + ['-g']
         frontend = self._config.tools.frontend
 
         tool = WbcRenewabilityGenerator(outputs=(dst, ''))
@@ -1316,7 +1355,7 @@ class Actc(AbstractDodo):                                                       
         tool = Preprocessor(program = self._config.tools.frontend,
                             options = self._config.src2bin.options
                                     + ['-std=%s' % (c_standard)]
-                                    + self._config.src2bin.PREPROCESS.options
+                                    + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                     + ['-D', 'ASPIRE_AID=%s' % (self._aid,)],
                             outputs = (dst, '.i'))
 
@@ -1598,7 +1637,7 @@ class Actc(AbstractDodo):                                                       
 
         tool = Preprocessor(program=self._config.tools.frontend,
                             options=self._config.src2bin.options
-                                    + self._config.src2bin.PREPROCESS.options
+                                    + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                     + ['-D', 'ASPIRE_AID=%s' % (self._aid,)]
                                     + ['-x', 'c'],
                             outputs=(dst, '.i'))
@@ -1864,7 +1903,7 @@ class Actc(AbstractDodo):                                                       
 
         tool = Preprocessor(program = self._config.tools.frontend,
                             options = self._config.src2bin.options
-                            + self._config.src2bin.PREPROCESS.options
+                            + self.expand_string(self._config.src2bin.PREPROCESS.options)
                             + ['-I', self.accl_headers]
                             + ['-I', self.curl_headers]
                             + ['-I', self.openssl_headers]
@@ -2085,7 +2124,7 @@ class Actc(AbstractDodo):                                                       
 
         tool = Preprocessor(program = self._config.tools.frontend,
                             options = self._config.src2bin.options
-                                    + self._config.src2bin.PREPROCESS.options
+                                    + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                     + ['-D', 'ASPIRE_AID=%s' % (self._aid,)],
                             outputs = (dst, '.i'))
 
@@ -2263,7 +2302,7 @@ class Actc(AbstractDodo):                                                       
 
         tool = Preprocessor(program = self._config.tools.frontend,
                             options = self._config.src2bin.options
-                                    + self._config.src2bin.PREPROCESS.options
+                                    + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                     + ['-D', 'ASPIRE_AID=%s' % (self._aid,)]
                                     + ['-I', self.accl_headers]
                                     + ['-I', self.websocket_headers],
@@ -2441,7 +2480,7 @@ class Actc(AbstractDodo):                                                       
 
         tool = Preprocessor(program=self._config.tools.frontend,
                             options=self._config.src2bin.options
-                                    + self._config.src2bin.PREPROCESS.options
+                                    + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                     + ['-D', 'ASPIRE_AID=%s' % (self._aid,)]
                                     + ['-I', self.accl_headers]
                                     + ['-I', self.websocket_headers]
@@ -2621,7 +2660,7 @@ class Actc(AbstractDodo):                                                       
 
         tool = Preprocessor(program=self._config.tools.frontend,
                             options=self._config.src2bin.options
-                                    + self._config.src2bin.PREPROCESS.options
+                                    + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                     + ['-D', 'ASPIRE_AID=%s' % (self._aid,)],
                             outputs=(dst, '.i'))
 
@@ -2900,7 +2939,7 @@ class Actc(AbstractDodo):                                                       
 
         tool = Preprocessor(program=self._config.tools.frontend,
                             options=self._config.src2bin.options
-                                    + self._config.src2bin.PREPROCESS.options
+                                    + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                     + ['-D', 'ASPIRE_AID=%s' % (self._aid,)]
                                     + ['-I', self.accl_headers]
                                     + ['-I', self.websocket_headers],
@@ -2936,7 +2975,7 @@ class Actc(AbstractDodo):                                                       
         dst = join(self._output, output_folder)
 
         tool = CompilerSO(options=self._config.src2bin.options
-                                    + self._config.src2bin.PREPROCESS.options
+                                    + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                     + ['-I', self.accl_headers]
                                     + ['-I', self.websocket_headers],
                             outputs=(dst, self._aid + '.so'))
@@ -3272,14 +3311,12 @@ class Actc(AbstractDodo):                                                       
 
         tool = Compiler(program = self._config.tools.frontend,
                         options = self._config.src2bin.options
-                                + self._config.src2bin.PREPROCESS.options
+                                + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                 + ['-D', 'ASPIRE_AID=%s' % (self._aid,)]
                                 + self._config.src2bin.COMPILE.options
                                 + self._config.src2bin.COMPILE.options_c
-                                + ['-g',
-                                   '-mfloat-abi=softfp',
-                                   '-msoft-float',
-                                   '-mfpu=neon'],
+                                + CompilerFloatOptions(self._config.floating_point_abi)
+                                + ['-g'],
                         outputs = (dst, '.o'))
 
         yield tool.tasks(src)
@@ -3313,14 +3350,12 @@ class Actc(AbstractDodo):                                                       
 
         tool = Compiler(program = self._config.tools.frontend,
                         options = self._config.src2bin.options
-                                + self._config.src2bin.PREPROCESS.options
+                                + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                 + ['-D', 'ASPIRE_AID=%s' % (self._aid,)]
                                 + self._config.src2bin.COMPILE.options
                                 + self._config.src2bin.COMPILE.options_cpp
-                                + ['-g',
-                                   '-mfloat-abi=softfp',
-                                   '-msoft-float',
-                                   '-mfpu=neon'],
+                                + CompilerFloatOptions(self._config.floating_point_abi)
+                                + ['-g'],
                         outputs = (dst, '.o'))
 
         yield tool.tasks(src,
@@ -3356,14 +3391,12 @@ class Actc(AbstractDodo):                                                       
 
         tool = Compiler(program = self._config.tools.frontend,
                         options = self._config.src2bin.options
-                                + self._config.src2bin.PREPROCESS.options
+                                + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                 + ['-D', 'ASPIRE_AID=%s' % (self._aid,)]
                                 + self._config.src2bin.COMPILE.options
                                 + self._config.src2bin.COMPILE.options_cpp
+                                + CompilerFloatOptions(self._config.floating_point_abi)
                                 + ['-g',
-                                   '-mfloat-abi=softfp',
-                                   '-msoft-float',
-                                   '-mfpu=neon',
                                    '-E'],
                         outputs = (dst, '.i'))
 
@@ -3401,17 +3434,45 @@ class Actc(AbstractDodo):                                                       
 
         tool = Compiler(program = self._config.tools.frontend_fortran,
                         options = self._config.src2bin.options
-                                + self._config.src2bin.PREPROCESS.options
+                                + self.expand_string(self._config.src2bin.PREPROCESS.options)
+                                + ['-J', join(self._output, output_folder)]
                                 + ['-D', 'ASPIRE_AID=%s' % (self._aid,)]
                                 + self._config.src2bin.COMPILE.options
-                                + ['-g',
-                                   '-mfloat-abi=softfp',
-                                   '-msoft-float',
-                                   '-mfpu=neon'],
+                                + CompilerFloatOptions(self._config.floating_point_abi)
+                                + ['-g'],
                         outputs = (dst, '.o'),
                         exit_if_pgm_not_exist=False)
 
-        yield tool.tasks(src, header_files=[])
+        # Fortran may create modules.
+        # These modules need to be precompiled before they are referenced to by another file.
+        # Hence, the order of compilation matters.
+
+        # We first construct a full list of files to be compiled
+        consider_src = []
+        for consider_src_glob in src:
+            for module in iglob(consider_src_glob):
+                consider_src.append(module)
+            # end for
+        #end for
+
+        # Then we extract those files from the original input source list,
+        # in the order in which they were specified in the configuration file.
+        src_ordered = []
+        for source_file in self._source_files:
+            source_file_path = join(self._output, input_folder, basename(source_file))
+
+            try:
+                source_file_index = consider_src.index(source_file_path)
+                src_ordered.append(source_file_path)
+                del consider_src[source_file_index]
+            except ValueError:
+                # the source file does not need to be compiled with Fortran
+                pass
+            #end if
+        #end for
+        assert len(consider_src) == 0, 'Error: still need to consider %s\n       have %s' % (consider_src, src_ordered)
+
+        yield tool.tasks(src_ordered, header_files=[])
 
         # ----------------------------------------------------------------------
         self._updateDot('COMPILE_FORTRAN', input_folder, output_folder)
@@ -3444,13 +3505,11 @@ class Actc(AbstractDodo):                                                       
                                        '-O3',
                                        '-fPIC',
                                        '-marm',
-                                       '-mfloat-abi=softfp',
-                                       '-msoft-float',
-                                       '-mfpu=neon',
                                        '-std=gnu99',
                                        '-Wall',
                                        '-Wextra',
-                                       '-Wno-unused'],
+                                       '-Wno-unused']
+                                      + CompilerFloatOptions(self._config.floating_point_abi),
                             outputs = (dst, '.o'))
 
             yield tool.tasks(src)
@@ -3513,11 +3572,9 @@ class Actc(AbstractDodo):                                                       
                                        '-O3',
                                        '-fPIC',
                                        '-marm',
-                                       '-mfloat-abi=softfp',
-                                       '-msoft-float',
-                                       '-mfpu=neon',
                                        '-std=gnu99',
-                                       '-Wall'],
+                                       '-Wall']
+                                      + CompilerFloatOptions(self._config.floating_point_abi),
                             outputs = (dst, '.o'))
 
             yield tool.tasks(src)
@@ -3563,7 +3620,8 @@ class Actc(AbstractDodo):                                                       
                      'android'      : '/opt/diablo-android-gcc-toolchain/bin/arm-linux-androideabi-gcc',
                      'serverlinux'  : 'gcc'}
 
-        tool_options = self._config.src2bin.PREPROCESS.options + \
+        tool_options = self.expand_string(self._config.src2bin.PREPROCESS.options) + \
+                                  CompilerFloatOptions(self._config.floating_point_abi) + \
                                     ['-I', self.accl_headers,
                                     '-I', self.curl_headers,
                                     '-I', self.websocket_headers,
@@ -3571,9 +3629,6 @@ class Actc(AbstractDodo):                                                       
                                     '-g',
                                     '-Os',
                                     '-static',
-                                    #'-mfloat-abi=softfp',
-                                    #'-msoft-float'
-                                    '-mfpu=neon',
                                     '-DACCL_ASPIRE_PORTAL_ENDPOINT=\\"%(PROTOCOL)s://%(ENDPOINT)s:%(PORT)s\\"' \
                                             % {
                                             'PROTOCOL' : self._config.src2bin.COMPILE_ACCL.protocol,
@@ -3814,12 +3869,10 @@ class Actc(AbstractDodo):                                                       
                               + self._config.src2bin.LINK.options
                               + ['-g',
                                  CompilerLibraryPath(self._config.tools.frontend, 'dl', self._config.explicit_static),
-                                 '-mfloat-abi=softfp',
-                                 '-msoft-float',
-                                 '-mfpu=neon',
                                  '-Wl,-Map,%s.map'
                                  % (join(dst, self._config.src2bin.LINK.binary),)]
-                              + options,
+                              + options
+                              + CompilerFloatOptions(self._config.floating_point_abi),
                       outputs = (dst, ''))
 
         yield tool.tasks(src, join(dst, self._config.src2bin.LINK.binary))
@@ -3969,7 +4022,7 @@ class Actc(AbstractDodo):                                                       
 
         yield {'title'   : lambda task: task.name.replace(':', '', 1),
                'name'    : '\n   %-20s%s' % ('collect metrics', src),
-               'actions' : [CmdAction(' '.join([self._config.bin2bin.BLP00._02.script,
+               'actions' : [CmdAction(' '.join([self.expand_string(self._config.bin2bin.BLP00._02.script),
                                                 self._aid,
                                                 src,
                                                 '>', join(src, 'BLP00_02_SP.log'), '2>&1',
@@ -4198,12 +4251,10 @@ class Actc(AbstractDodo):                                                       
 
         tool = Compiler(program = self._config.tools.frontend,
                         options = self._config.src2bin.options
-                                + self._config.src2bin.PREPROCESS.options
+                                + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                 + self._config.src2bin.COMPILE.options
                                 + self._config.src2bin.COMPILE.options_c
-                                + ['-mfloat-abi=softfp',
-                                   '-msoft-float',
-                                   '-mfpu=neon'],
+                                + CompilerFloatOptions(self._config.floating_point_abi),
                         outputs = (dst, '.o'))
 
         yield tool.tasks(src)
@@ -4237,7 +4288,7 @@ class Actc(AbstractDodo):                                                       
 
         tool = Compiler(program=self._config.tools.frontend,
                         options=self._config.src2bin.options
-                                + self._config.src2bin.PREPROCESS.options
+                                + self.expand_string(self._config.src2bin.PREPROCESS.options)
                                 + self._config.src2bin.COMPILE.options
                                 + self._config.src2bin.COMPILE.options_c
                                 + ['-std=c99',
@@ -4509,12 +4560,10 @@ class Actc(AbstractDodo):                                                       
                               + [option_libs]
                               + self._config.src2bin.LINK.options
                               + options
+                              + CompilerFloatOptions(self._config.floating_point_abi)
                               + ['-g',
                                  CompilerLibraryPath(compiler=frontend, library='dl', explicit_static=self._config.explicit_static),
                                  CompilerLibraryPath(compiler=frontend, library='m', explicit_static=self._config.explicit_static),
-                                 '-mfloat-abi=softfp',
-                                 '-msoft-float',
-                                 '-mfpu=neon',
                                  '-Wl,-Map,%s.map' % (binary,)],
                       outputs = (dst, ''))
 
@@ -4804,13 +4853,13 @@ class Actc(AbstractDodo):                                                       
         p20_sp_done = join(self._output, self._folders['BLP04']['out_integrate'] + self._folders['BLP04']['suffix'], 'mobile_blocks', '.p20_sp_done')
         p80_sp_done = join(self._output, self._folders['SLP07']['out'] + self._folders['SLP07']['suffix'], '.p80_sp_done')
 
-        if (not (isdir(src) and self._config.bin2bin.BLP04_DYN._01.script and isfile(self._config.bin2bin.BLP04_DYN._01.script))):
+        if (not (isdir(src) and self._config.bin2bin.BLP04_DYN._01.script and isfile(self.expand_string(self._config.bin2bin.BLP04_DYN._01.script)))):
             return
         # end if
 
         yield {'title'   : lambda task: task.name.replace(':', '', 1),
                'name'    : '\n   %-20s%s' % ('collect metrics', src),
-               'actions' : [CmdAction(' '.join([self._config.bin2bin.BLP04_DYN._01.script,
+               'actions' : [CmdAction(' '.join([self.expand_string(self._config.bin2bin.BLP04_DYN._01.script),
                                                 self._aid,
                                                 src,
                                                 '>', join(src, 'BLP04_INTEGRATE_SP.log'), '2>&1',
@@ -5096,13 +5145,13 @@ class Actc(AbstractDodo):                                                       
         p20_sp_done = join(self._output, self._folders['BLP04']['out'] + self._folders['BLP04']['suffix'], 'mobile_blocks', '.p20_sp_done')
         p80_sp_done = join(self._output, self._folders['SLP07']['out'] + self._folders['SLP07']['suffix'], '.p80_sp_done')
 
-        if (not (isdir(src) and self._config.bin2bin.BLP04_DYN._01.script and isfile(self._config.bin2bin.BLP04_DYN._01.script))):
+        if (not (isdir(src) and self._config.bin2bin.BLP04_DYN._01.script and isfile(self.expand_string(self._config.bin2bin.BLP04_DYN._01.script)))):
             return
         # end if
 
         yield {'title'   : lambda task: task.name.replace(':', '', 1),
                'name'    : '\n   %-20s%s' % ('metrics', src),
-               'actions' : [CmdAction(' '.join([self._config.bin2bin.BLP04_DYN._01.script,
+               'actions' : [CmdAction(' '.join([self.expand_string(self._config.bin2bin.BLP04_DYN._01.script),
                                                 self._aid,
                                                 src,
                                                 '>', join(src, 'BLP04_DYN_01.log'), '2>&1',
