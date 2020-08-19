@@ -43,6 +43,7 @@ from os.path                    import abspath
 from os.path                    import getsize
 from os.path                    import basename
 from os.path                    import join
+from os.path                    import dirname
 
 from re                         import sub
 
@@ -470,6 +471,7 @@ class Archiver(AbstractCmdTool):
         # end if
 
         dst = toList(args[1])
+        path = dirname(args[1])
 
         yield {'name'    : self._name(self._ACTION, objs, '\ninto', dst),
                'title'   : self._title,
@@ -481,6 +483,7 @@ class Archiver(AbstractCmdTool):
                              }],
                'targets' : dst,
                'file_dep': objs,
+               'task_dep' : ['_createfolder_' + path]
                }
 
     # end def tasks

@@ -58,7 +58,7 @@ from actc.tools                 import toList
 # implementation
 # ------------------------------------------------------------------------------
 
-INCLUDE_PATH_REWRITER = '/projects/scripts/include_rel2abs.sh'
+INCLUDE_PATH_REWRITER = '/data/BOEK/_helper_scripts/include_rel2abs.sh'
 
 class Copier(AbstractBasicPythonTool):
     '''

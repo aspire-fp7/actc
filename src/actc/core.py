@@ -126,7 +126,7 @@ from actc.tools.xtranslator     import Xtranslator
 from actc.tools.renewability    import RenewabilityCreate
 from actc.tools.renewability    import RenewabilityPolicy
 
-GENERATOR="/projects/scripts/generate-annotation-file.sh"
+GENERATOR="/data/BOEK/_helper_scripts/generate-annotation-file.sh"
 
 def CompilerFloatOptions(floating_point_abi):
     result = ['-mfloat-abi=%s' % floating_point_abi]
@@ -162,7 +162,7 @@ class Actc(AbstractDodo):                                                       
     Aspire Compiler Tool Chain
     '''
 
-    def __init__(self, path, debug = False, verbose = False):
+    def __init__(self, path, debug = False, verbose = False, source_list = None, output_dir = "build"):
         '''
         Constructor
 
@@ -174,7 +174,7 @@ class Actc(AbstractDodo):                                                       
         # .../aspire.json --> build/*
         # .../<module>.json --> build/<module>/*
         self._module = basename(path).split('.', 1)[0]
-        output = 'build/%s' % (self._module if self._module != 'aspire' else '.',)
+        output = '%s/%s' % (output_dir, self._module if self._module != 'aspire' else '.',)
 
         super(Actc, self).__init__(output = output, debug = debug, verbose = verbose)
 
@@ -338,6 +338,7 @@ class Actc(AbstractDodo):                                                       
         self._using_fortran = False
         self._archive_uid = 0
 
+        self._source_list = source_list
     # end def __init__
 
 
@@ -404,7 +405,13 @@ class Actc(AbstractDodo):                                                       
         self._archives = []
         self._archives_must_link = []
         self._not_in_archive = []
-        for lst in self._config.src2src.SLP01.source:
+
+        # select appropriate source list
+        source_list = self._config.src2src.SLP01.source
+        if self._source_list == "components":
+            source_list = self._config.src2src.SLP01.source_components
+
+        for lst in source_list:
             if isinstance(lst, list):
                 archive_name = "archive_%d.a" % self._archive_uid
                 archive_contents = []
@@ -425,7 +432,24 @@ class Actc(AbstractDodo):                                                       
                     assert False, "ERROR: source file '%s' not found" % e_filename
                 self._not_in_archive.append(basename(e_filename))
                 src.append(e_filename)
+
+        # to decide compilation order (see task_COMPILE_FORTRAN)
         self._source_files = src
+
+        if self._source_list == "components":
+            if self._config.src2src.SLP01.compilation_order == "source":
+                self._source_files = []
+
+                for lst in self._config.src2src.SLP01.source:
+                    if isinstance(lst, list):
+                        for filename in lst:
+                            self._source_files.append(self.expand_string(filename))
+                    else:
+                        self._source_files.append(self.expand_string(lst))
+                    #endif
+                #endfor
+            #endif
+        #endif
 
         # Copy ADSS generated patch file if present
         if(self._config.src2src.SLP01.annotations_patch):
@@ -3864,9 +3888,9 @@ class Actc(AbstractDodo):                                                       
             src.append(join(self._output, input_folder, archive_name, archive_name))
 
         tool = Linker(program = self._config.tools.frontend,
-                      options = self._config.src2bin.options
+                      options = self.expand_string(self._config.src2bin.options)
                               + [option_libs]
-                              + self._config.src2bin.LINK.options
+                              + self.expand_string(self._config.src2bin.LINK.options)
                               + ['-g',
                                  CompilerLibraryPath(self._config.tools.frontend, 'dl', self._config.explicit_static),
                                  '-Wl,-Map,%s.map'
@@ -4556,9 +4580,9 @@ class Actc(AbstractDodo):                                                       
         binary = join(dst, binary)
 
         tool = Linker(program = frontend,
-                      options = self._config.src2bin.options
+                      options = self.expand_string(self._config.src2bin.options)
                               + [option_libs]
-                              + self._config.src2bin.LINK.options
+                              + self.expand_string(self._config.src2bin.LINK.options)
                               + options
                               + CompilerFloatOptions(self._config.floating_point_abi)
                               + ['-g',

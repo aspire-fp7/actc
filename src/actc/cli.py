@@ -107,6 +107,20 @@ ACTC v %s
                            default=False,
                            help='only generate the application id (AID) ')
 
+        group.add_argument('-s', '--sourcelist',
+                           metavar = 'sourceList',
+                           action  = 'store',
+                           type    = str,
+                           default = None,
+                           help    = 'select a source list variable')
+
+        group.add_argument('-o', '--outdir',
+                           metavar = 'outdir',
+                           action  = 'store',
+                           type    = str,
+                           default = "build",
+                           help    = 'select output directory')
+
         group = parser.add_argument_group('Configuration')
 
         group.add_argument('-f', '--file',
@@ -157,7 +171,7 @@ ACTC v %s
         # end if
 
         super(Main, self).__init__(args.file[0] if isinstance(args.file, list) else args.file,
-                                    debug=args.debug, verbose=args.verbose)
+                                    debug=args.debug, verbose=args.verbose, source_list=args.sourcelist, output_dir=args.outdir)
 
         if args.aid:
             print('%s' % self._aid);

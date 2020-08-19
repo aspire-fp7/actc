@@ -228,7 +228,9 @@ class Config(AttrDict):
                   'annotations_patch':      '',
                   'external_annotations':   '',
                   'source':                 [],
+                  'source_components':      [],
                   'extended_copy':          '',
+                  'compilation_order':      ''
                   },
 
               'SLP02': {
@@ -770,14 +772,18 @@ class Config(AttrDict):
       "annotations_patch":      %(ANNOTATIONS_PATCH)s,
       "external_annotations":   %(EXTERNAL_ANNOTATIONS)s,
       "source"  :               %(SOURCE)s,
-      "extended_copy":          %(EXTENDED_COPY)s
+      "source_components":      %(SOURCE_COMPONENTS)s,
+      "extended_copy":          %(EXTENDED_COPY)s,
+      "compilation_order":      %(COMPILATION_ORDER)s,
     },
 ''' % {'EXCLUDED': self._item2json(self.src2src.SLP01.excluded),
        'TRAVERSE': self._item2json(self.src2src.SLP01.traverse),
        'ANNOTATIONS_PATCH': self._item2json(self.src2src.SLP01.annotations_patch),
        'EXTERNAL_ANNOTATIONS': self._item2json(self.src2src.SLP01.external_annotations),
        'SOURCE'  : self._item2json(self.src2src.SLP01.source, sort = True),
-       'EXTENDED_COPY': self._item2json(self.src2src.SLP01.extended_copy)
+       'SOURCE_COMPONENTS'  : self._item2json(self.src2src.SLP01.source_components, sort = True),
+       'EXTENDED_COPY': self._item2json(self.src2src.SLP01.extended_copy),
+       'COMPILATION_ORDER': self._item2json(self.src2src.SLP01.compilation_order)
        })
 
         lines.append('''\
