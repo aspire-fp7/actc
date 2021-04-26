@@ -4983,7 +4983,7 @@ class Actc(AbstractDodo):                                                       
             options.extend(['-SP', 'none'])
         # end if
 
-        options.extend(['-S', '-ntag on'])
+        options.extend(['-ntag on'])
 
         # instanciate tool
         tool = DiabloObfuscator(program = self._config.tools.obfuscator,
