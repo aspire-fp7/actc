@@ -421,6 +421,7 @@ class Actc(AbstractDodo):                                                       
                         assert False, "ERROR: source file '%s' not found" % e_filename
                     archive_contents.append(basename(e_filename))
                     src.append(e_filename)
+                assert archive_contents
                 self._archives.append((archive_name, archive_contents))
                 self._archive_uid += 1
             else:
@@ -3692,16 +3693,17 @@ class Actc(AbstractDodo):                                                       
 
             src = join(self._output, input_folder)
 
-            archive_name = 'archive_%d.a' % self._archive_uid
-            self._archive_uid += 1
-
             archive_contents = []
             cg_patterns = ['attestator_*.i', 'mechanisms_*.i', 'utils.c.i']
             for cg_pattern in cg_patterns:
                 for x in iglob(join(src, cg_pattern)):
                     archive_contents.append(basename(x))
 
-            self._archives.append((archive_name, archive_contents))
+            if archive_contents:
+                archive_name = 'archive_%d.a' % self._archive_uid
+                self._archive_uid += 1
+                self._archives.append((archive_name, archive_contents))
+            #endif
         #endif
 
         if self._binary_annotations['anti_debugging']:
@@ -3717,6 +3719,7 @@ class Actc(AbstractDodo):                                                       
                 archive_contents.append('debugger.c')
             #endif
 
+            assert archive_contents
             self._archives_must_link.append((archive_name, archive_contents))
         #endif
 
@@ -3744,6 +3747,7 @@ class Actc(AbstractDodo):                                                       
             if self._binary_annotations['renewability']:
                 archive_contents.append(join(renewability_obj, 'renewability.o'))
 
+            assert archive_contents
             self._archives_must_link.append((archive_name, archive_contents))
         #endif
 
